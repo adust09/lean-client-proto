@@ -1,0 +1,3 @@
+.lake/
+ffi/*.o
+ffi/*.a
