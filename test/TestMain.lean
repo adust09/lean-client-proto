@@ -14,6 +14,7 @@ import Test.SSZ.Vector
 import Test.SSZ.Merkleization
 import Test.Consensus.Types
 import Test.Consensus.Signing
+import Test.Crypto.LeanSig
 
 def main : IO Unit := do
   IO.println "═══════════════════════════════════════════"
@@ -57,6 +58,10 @@ def main : IO Unit := do
 
   -- Consensus Signing tests
   let (t, f) ← Test.Consensus.Signing.runTests
+  total := total + t; failures := failures + f
+
+  -- Crypto LeanSig tests
+  let (t, f) ← Test.Crypto.LeanSig.runTests
   total := total + t; failures := failures + f
 
   IO.println "═══════════════════════════════════════════"
