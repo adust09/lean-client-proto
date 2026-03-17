@@ -52,9 +52,11 @@ def setBit {n : Nat} (bv : Bitvector n) (i : Nat) (_h : i < n) (v : Bool) : Bitv
   let mask := (1 : UInt8) <<< bitIdx.toUInt8
   let newByte := if v then byte ||| mask else byte &&& (~~~mask)
   let newData := bv.data.set! byteIdx newByte
-  -- set! preserves ByteArray.size via Array.size_setIfInBounds.
-  -- Proof deferred: the let-binding chain makes automation struggle.
-  ⟨newData, by exact sorry⟩
+  ⟨newData, by
+    show newData.size = (n + 7) / 8
+    simp only [newData, ByteArray.size, ByteArray.set!,
+               Array.set!_eq_setIfInBounds, Array.size_setIfInBounds]
+    exact bv.hsize⟩
 
 /-- Count the number of set bits. -/
 def popcount {n : Nat} (bv : Bitvector n) : Nat := Id.run do

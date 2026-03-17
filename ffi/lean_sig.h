@@ -1,8 +1,8 @@
 /*
- * lean_sig.h — leanSig C ABI shim (Phase 2 stub)
+ * lean_sig.h — leanSig C ABI (epoch-based signing)
  *
- * Wraps the leanSig XMSS signature library for Lean4 FFI.
- * See dev/06-ffi-abi-proposal.md for the full ABI specification.
+ * Wraps the leanSig signature library for Lean4 FFI.
+ * Backed by the lean-sig-ffi Rust crate (ffi/lean_sig_ffi/).
  */
 
 #ifndef LEAN_SIG_H
@@ -28,25 +28,27 @@ extern "C" {
 int32_t lean_sig_pubkey_size(size_t *out);
 int32_t lean_sig_signature_size(size_t *out);
 
-/* Key generation */
+/* Key generation (epoch-based) */
 int32_t lean_sig_keygen(
-    uint32_t tree_height,
+    uint32_t activation_epoch,
+    uint32_t num_active_epochs,
     void **private_key_out,
     void **public_key_out
 );
 
-/* Signing (stateful: leaf_index managed externally) */
+/* Signing (epoch-based: each epoch may only be used once) */
 int32_t lean_sig_sign(
     void *private_key,
+    uint32_t epoch,
     const uint8_t *message, size_t message_len,
-    uint32_t leaf_index,
-    uint8_t *signature_out, size_t signature_len,
+    uint8_t *signature_out, size_t signature_cap,
     size_t *sig_written_out
 );
 
 /* Verification (predicate: 0=valid, 1=invalid, <0=error) */
 int32_t lean_sig_verify(
     const uint8_t *public_key, size_t public_key_len,
+    uint32_t epoch,
     const uint8_t *message, size_t message_len,
     const uint8_t *signature, size_t signature_len
 );
@@ -72,6 +74,15 @@ int32_t lean_sig_export_public_key(
     uint8_t *buf_out, size_t buf_capacity,
     size_t *bytes_written_out
 );
+
+/* Epoch preparation (sliding window management) */
+int32_t lean_sig_get_prepared_interval(
+    const void *private_key,
+    uint64_t *start_out,
+    uint64_t *end_out
+);
+
+int32_t lean_sig_advance_preparation(void *private_key);
 
 #ifdef __cplusplus
 }
