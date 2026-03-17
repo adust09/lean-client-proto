@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install elan and Lean
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Cache Lean build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.elan/toolchains
+            .lake
+          key: lean-${{ hashFiles('lean-toolchain', 'lakefile.lean') }}-${{ hashFiles('**/*.lean') }}
+          restore-keys: |
+            lean-${{ hashFiles('lean-toolchain', 'lakefile.lean') }}-
+
+      - name: Cache Rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ffi/lean_sig_ffi/target
+          key: rust-${{ hashFiles('ffi/lean_sig_ffi/Cargo.lock') }}
+          restore-keys: rust-
+
+      - name: Build FFI
+        run: cd ffi && bash build.sh
+
+      - name: Build library
+        run: lake build LeanConsensus
+
+      - name: Build proofs
+        run: lake build Proofs
+
+      - name: Run tests
+        run: lake exe test-runner

@@ -1,3 +1,5 @@
 .lake/
 ffi/*.o
 ffi/*.a
+ffi/lean_sig_ffi/target/
+ffi/lean_sig_ffi/Cargo.lock
