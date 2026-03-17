@@ -14,3 +14,4 @@ import LeanConsensus.SSZ.Bitlist
 import LeanConsensus.SSZ.Vector
 import LeanConsensus.SSZ.List
 import LeanConsensus.SSZ.Merkleization
+import LeanConsensus.SSZ.Derive

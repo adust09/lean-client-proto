@@ -8,6 +8,7 @@
 import LeanConsensus.SSZ.Error
 import LeanConsensus.SSZ.Types
 import LeanConsensus.SSZ.BytesN
+import LeanConsensus.SSZ.Merkleization
 
 namespace LeanConsensus.SSZ
 
@@ -80,5 +81,10 @@ instance (n : Nat) : SszEncode (Bitvector n) where
 
 instance (n : Nat) : SszDecode (Bitvector n) where
   sszDecode data := Bitvector.mkChecked data
+
+instance (n : Nat) : SszHashTreeRoot (Bitvector n) where
+  hashTreeRoot bv :=
+    let chunks := packBits bv.data
+    merkleize chunks ((n + 255) / 256)
 
 end LeanConsensus.SSZ
