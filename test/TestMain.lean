@@ -16,6 +16,7 @@ import Test.Consensus.Types
 import Test.Consensus.Signing
 import Test.Crypto.LeanSig
 import Test.Crypto.KeyState
+import Test.Crypto.LeanMultisig
 
 def main : IO Unit := do
   IO.println "═══════════════════════════════════════════"
@@ -67,6 +68,10 @@ def main : IO Unit := do
 
   -- Crypto KeyState tests
   let (t, f) ← Test.Crypto.KeyState.runTests
+  total := total + t; failures := failures + f
+
+  -- Crypto LeanMultisig tests
+  let (t, f) ← Test.Crypto.LeanMultisig.runTests
   total := total + t; failures := failures + f
 
   IO.println "═══════════════════════════════════════════"

@@ -10,6 +10,8 @@ package «lean-consensus» where
     "-llean_sha256",
     "-llean_sig",
     "-llean_sig_ffi",
+    "-llean_multisig",
+    "-llean_multisig_ffi",
     "-L/usr/lib/x86_64-linux-gnu",
     "-lssl",
     "-lcrypto"

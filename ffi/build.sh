@@ -20,3 +20,15 @@ if [ -f liblean_sig_ffi.a ]; then
   ar rcs liblean_sig.a lean_sig.o
   echo "Built ffi/liblean_sig.a"
 fi
+
+# Build leanMultisig FFI (Rust → C static library)
+if [ -d lean_multisig_ffi ]; then
+  (cd lean_multisig_ffi && bash build.sh)
+fi
+
+# Build leanMultisig Lean4 wrapper (C → Lean4 runtime)
+if [ -f liblean_multisig_ffi.a ]; then
+  gcc -c -fPIC -I"$LEAN_INCLUDE" lean_multisig.c -o lean_multisig.o
+  ar rcs liblean_multisig.a lean_multisig.o
+  echo "Built ffi/liblean_multisig.a"
+fi
