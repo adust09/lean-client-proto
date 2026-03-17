@@ -1,0 +1,3 @@
+[submodule "ffi/vendor/leanSig"]
+	path = ffi/vendor/leanSig
+	url = https://github.com/leanEthereum/leanSig
