@@ -7,4 +7,5 @@
 import LeanConsensus.SSZ
 import LeanConsensus.Consensus.Constants
 import LeanConsensus.Consensus.Types
+import LeanConsensus.Consensus.Signing
 import LeanConsensus.Crypto.Sha256

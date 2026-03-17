@@ -13,6 +13,7 @@ import Test.SSZ.Bitlist
 import Test.SSZ.Vector
 import Test.SSZ.Merkleization
 import Test.Consensus.Types
+import Test.Consensus.Signing
 
 def main : IO Unit := do
   IO.println "═══════════════════════════════════════════"
@@ -52,6 +53,10 @@ def main : IO Unit := do
 
   -- Consensus Types tests
   let (t, f) ← Test.Consensus.Types.runTests
+  total := total + t; failures := failures + f
+
+  -- Consensus Signing tests
+  let (t, f) ← Test.Consensus.Signing.runTests
   total := total + t; failures := failures + f
 
   IO.println "═══════════════════════════════════════════"
