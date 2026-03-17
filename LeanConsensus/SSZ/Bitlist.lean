@@ -10,6 +10,7 @@
 
 import LeanConsensus.SSZ.Error
 import LeanConsensus.SSZ.Types
+import LeanConsensus.SSZ.Merkleization
 
 namespace LeanConsensus.SSZ
 
@@ -122,5 +123,11 @@ instance (maxCap : Nat) : SszEncode (Bitlist maxCap) where
 
 instance (maxCap : Nat) : SszDecode (Bitlist maxCap) where
   sszDecode := Bitlist.sszDecodeImpl
+
+instance (maxCap : Nat) : SszHashTreeRoot (Bitlist maxCap) where
+  hashTreeRoot bl :=
+    let bitChunks := packBits bl.data
+    let bitLimit := (maxCap + 255) / 256
+    mixInLength (merkleize bitChunks bitLimit) bl.length
 
 end LeanConsensus.SSZ

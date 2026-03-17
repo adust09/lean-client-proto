@@ -46,4 +46,9 @@ def isFixedSize {α : Type} [inst : SszType α] : Bool :=
 def getFixedSize {α : Type} [inst : SszType α] : Option UInt32 :=
   inst.sszFixedSize
 
+/-- Marker typeclass for SSZ "basic" types whose serialized bytes can be packed
+    directly into chunks for hash_tree_root (as opposed to composite types where
+    each element is hashed individually). -/
+class SszPackable (α : Type) extends SszEncode α
+
 end LeanConsensus.SSZ

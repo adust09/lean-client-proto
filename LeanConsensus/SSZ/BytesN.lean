@@ -69,4 +69,6 @@ instance (n : Nat) : SszEncode (BytesN n) where
 instance (n : Nat) : SszDecode (BytesN n) where
   sszDecode data := BytesN.mkChecked data
 
+instance (n : Nat) : SszPackable (BytesN n) where
+
 end LeanConsensus.SSZ

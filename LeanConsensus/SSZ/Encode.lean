@@ -82,6 +82,16 @@ instance : SszType Bool where sszFixedSize := some 1
 instance : SszEncode Bool where sszEncode := encodeBool
 
 -- ════════════════════════════════════════════════════════════════
+-- SszPackable instances for primitive types (basic SSZ types)
+-- ════════════════════════════════════════════════════════════════
+
+instance : SszPackable UInt8 where
+instance : SszPackable UInt16 where
+instance : SszPackable UInt32 where
+instance : SszPackable UInt64 where
+instance : SszPackable Bool where
+
+-- ════════════════════════════════════════════════════════════════
 -- Two-Pass Container Encoder
 -- ════════════════════════════════════════════════════════════════
 

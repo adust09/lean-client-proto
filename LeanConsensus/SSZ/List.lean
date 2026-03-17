@@ -10,6 +10,7 @@ import LeanConsensus.SSZ.Error
 import LeanConsensus.SSZ.Types
 import LeanConsensus.SSZ.Encode
 import LeanConsensus.SSZ.Decode
+import LeanConsensus.SSZ.Merkleization
 
 namespace LeanConsensus.SSZ
 
@@ -141,5 +142,22 @@ instance {α : Type} [SszDecode α] (maxCap : Nat) : SszDecode (SszList maxCap �
     match SszType.sszFixedSize (α := α) with
     | some elemSize => decodeFixedList data elemSize.toNat
     | none          => decodeVariableList data
+
+/-- SszHashTreeRoot for SszList of packable (basic) types: pack serialized data + mixInLength. -/
+instance (priority := 100) {α : Type} [SszPackable α] (maxCap : Nat) : SszHashTreeRoot (SszList maxCap α) where
+  hashTreeRoot l :=
+    let serialized := l.elems.foldl (init := ByteArray.empty) fun acc elem =>
+      acc ++ SszEncode.sszEncode elem
+    let chunks := pack serialized
+    let limit := match SszType.sszFixedSize (α := α) with
+      | some elemSize => chunkCountFixed maxCap elemSize.toNat
+      | none => maxCap
+    mixInLength (merkleize chunks limit) l.elems.size
+
+/-- SszHashTreeRoot for SszList of composite types: hash each element + mixInLength. -/
+instance (priority := 50) {α : Type} [SszHashTreeRoot α] (maxCap : Nat) : SszHashTreeRoot (SszList maxCap α) where
+  hashTreeRoot l :=
+    let chunks := l.elems.map SszHashTreeRoot.hashTreeRoot
+    mixInLength (merkleize chunks (chunkCountVariable maxCap)) l.elems.size
 
 end LeanConsensus.SSZ

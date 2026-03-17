@@ -10,6 +10,7 @@ import LeanConsensus.SSZ.Error
 import LeanConsensus.SSZ.Types
 import LeanConsensus.SSZ.Encode
 import LeanConsensus.SSZ.Decode
+import LeanConsensus.SSZ.Merkleization
 
 namespace LeanConsensus.SSZ
 
@@ -125,5 +126,21 @@ instance {α : Type} [SszDecode α] (n : Nat) : SszDecode (SszVector n α) where
     match SszType.sszFixedSize (α := α) with
     | some elemSize => decodeFixedVector data elemSize.toNat
     | none          => decodeVariableVector data
+
+/-- SszHashTreeRoot for SszVector of packable (basic) types: pack serialized data. -/
+instance (priority := 100) {α : Type} [SszPackable α] (n : Nat) : SszHashTreeRoot (SszVector n α) where
+  hashTreeRoot v :=
+    let serialized := v.elems.foldl (init := ByteArray.empty) fun acc elem =>
+      acc ++ SszEncode.sszEncode elem
+    let chunks := pack serialized
+    match SszType.sszFixedSize (α := α) with
+    | some elemSize => merkleize chunks (chunkCountFixed n elemSize.toNat)
+    | none => merkleize chunks n
+
+/-- SszHashTreeRoot for SszVector of composite types: hash each element individually. -/
+instance (priority := 50) {α : Type} [SszHashTreeRoot α] (n : Nat) : SszHashTreeRoot (SszVector n α) where
+  hashTreeRoot v :=
+    let chunks := v.elems.map SszHashTreeRoot.hashTreeRoot
+    merkleize chunks n
 
 end LeanConsensus.SSZ
