@@ -19,6 +19,7 @@ import Test.Crypto.KeyState
 import Test.Crypto.LeanMultisig
 import Test.Actor
 import Test.Consensus.StateTransition
+import Test.Consensus.ForkChoice
 
 def main : IO Unit := do
   IO.println "═══════════════════════════════════════════"
@@ -82,6 +83,10 @@ def main : IO Unit := do
 
   -- State Transition tests
   let (t, f) ← Test.Consensus.StateTransition.runTests
+  total := total + t; failures := failures + f
+
+  -- Fork Choice tests
+  let (t, f) ← Test.Consensus.ForkChoice.runTests
   total := total + t; failures := failures + f
 
   IO.println "═══════════════════════════════════════════"
