@@ -20,6 +20,11 @@ import Test.Crypto.LeanMultisig
 import Test.Actor
 import Test.Consensus.StateTransition
 import Test.Consensus.ForkChoice
+import Test.Network.HttpClient
+import Test.Network.BeaconAPI
+import Test.Network.P2P
+import Test.Consensus.Aggregator
+import Test.Actor.WireActors
 
 def main : IO Unit := do
   IO.println "═══════════════════════════════════════════"
@@ -87,6 +92,26 @@ def main : IO Unit := do
 
   -- Fork Choice tests
   let (t, f) ← Test.Consensus.ForkChoice.runTests
+  total := total + t; failures := failures + f
+
+  -- HTTP Client tests
+  let (t, f) ← Test.Network.HttpClient.runTests
+  total := total + t; failures := failures + f
+
+  -- Beacon API tests
+  let (t, f) ← Test.Network.BeaconAPI.runTests
+  total := total + t; failures := failures + f
+
+  -- P2P tests
+  let (t, f) ← Test.Network.P2P.runTests
+  total := total + t; failures := failures + f
+
+  -- Aggregator tests
+  let (t, f) ← Test.Consensus.Aggregator.runTests
+  total := total + t; failures := failures + f
+
+  -- Wire Actor tests
+  let (t, f) ← Test.Actor.WireActors.runTests
   total := total + t; failures := failures + f
 
   IO.println "═══════════════════════════════════════════"
