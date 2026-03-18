@@ -12,3 +12,4 @@ import LeanConsensus.Crypto.Sha256
 import LeanConsensus.Crypto.LeanSig
 import LeanConsensus.Crypto.KeyState
 import LeanConsensus.Crypto.LeanMultisig
+import LeanConsensus.Actor
