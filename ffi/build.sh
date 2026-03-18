@@ -9,6 +9,11 @@ gcc -c -fPIC libc_compat.c -o libc_compat.o
 ar rcs liblean_sha256.a lean_sha256.o libc_compat.o
 echo "Built ffi/liblean_sha256.a"
 
+# Build signal handler
+gcc -c -fPIC -I"$LEAN_INCLUDE" lean_signal.c -o lean_signal.o
+ar rcs liblean_signal.a lean_signal.o
+echo "Built ffi/liblean_signal.a"
+
 # Build leanSig FFI (Rust → C static library)
 if [ -d lean_sig_ffi ]; then
   (cd lean_sig_ffi && bash build.sh)

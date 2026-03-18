@@ -8,6 +8,7 @@ package «lean-consensus» where
   moreLinkArgs := #[
     "-L./ffi",
     "-llean_sha256",
+    "-llean_signal",
     "-llean_sig",
     "-llean_sig_ffi",
     "-llean_multisig",
