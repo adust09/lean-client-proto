@@ -103,6 +103,28 @@ def runTests : IO (Nat × Nat) := do
     total := total + t; failures := failures + f
     shutdown actor
 
+  -- Test 5: CancellationToken-based graceful shutdown
+  do
+    let counter ← IO.mkRef (0 : Nat)
+    let actor ← spawnActor (msg := Nat) fun _msg => do
+      counter.modify (· + 1)
+      return true
+    send actor 1
+    send actor 2
+    IO.sleep 50
+    -- Verify token is not cancelled before shutdown
+    let cancelledBefore ← actor.token.isCancelled
+    let (t, f) ← check "token not cancelled before shutdown" (!cancelledBefore)
+    total := total + t; failures := failures + f
+    -- Shutdown sets the cancellation token
+    shutdown actor
+    let cancelledAfter ← actor.token.isCancelled
+    let (t, f) ← check "token cancelled after shutdown" cancelledAfter
+    total := total + t; failures := failures + f
+    let closed ← actor.channel.isClosed
+    let (t, f) ← check "channel closed after shutdown" closed
+    total := total + t; failures := failures + f
+
   return (total, failures)
 
 end Test.Actor

@@ -7,9 +7,10 @@
   Proof status:
   - Structural invariants (3): proven
   - Bool roundtrip: proven by case analysis + rfl
-  - UInt64 roundtrip: sorry (requires LE byte reconstruction identity)
+  - UInt64 roundtrip: proven via BitVec LE byte decomposition identity
   - BytesN roundtrip: proven via size invariant + proof irrelevance
-  - Container types (4): sorry (derive-generated instances are opaque to simp)
+  - Container types (4): sorry (derive-generated instances produce terms
+    too large for simp; requires custom reflection or derive-aware tactics)
 -/
 
 import LeanConsensus.SSZ
@@ -39,23 +40,52 @@ theorem ssz_roundtrip_bool (v : Bool) :
   cases v <;> rfl
 
 -- ════════════════════════════════════════════════════════════════
--- UInt64 roundtrip
+-- UInt64 roundtrip — LE byte decomposition/recomposition
 -- ════════════════════════════════════════════════════════════════
 
-/- Proof sketch: SszEncode.sszEncode v produces 8 LE bytes via encodeUInt64.
-   SszDecode.sszDecode checks size = 8, then decodeUInt64At reconstructs
-   the value by combining the 8 bytes with shifts.
+/-- Extracting byte k from a BitVec 64 via shift-right + mod 256, then masking
+    with 0xFF and zero-extending back to 64 bits, equals setWidth 8 then setWidth 64. -/
+private theorem ofNat64_shr_mod256_and255 (v : BitVec 64) (k : Nat) :
+    BitVec.ofNat 64 (v.toNat >>> k % 256) &&& 255#64 =
+    ((v >>> k).setWidth 8).setWidth 64 := by
+  rw [(BitVec.toNat_ushiftRight v k).symm, show (256 : Nat) = 2 ^ 8 from by decide,
+      ← BitVec.toNat_setWidth, BitVec.ofNat_toNat]
+  bv_decide
 
-   The core identity is:
-     let n := v.toNat
-     let b_i := ((n >>> (8*i)) &&& 0xFF).toUInt8
-     (b0.toNat ||| (b1.toNat <<< 8) ||| ... ||| (b7.toNat <<< 56)).toUInt64 = v
+/-- Special case of the above for k=0 (no shift). -/
+private theorem ofNat64_mod256_and255 (v : BitVec 64) :
+    BitVec.ofNat 64 (v.toNat % 256) &&& 255#64 =
+    (v.setWidth 8).setWidth 64 := by
+  have := ofNat64_shr_mod256_and255 v 0; simp at this; exact this
 
-   This follows from the bitwise decomposition identity for 64-bit integers.
-   Requires lemmas about BitVec/UInt64 bit manipulation that are non-trivial
-   to establish in Lean 4's current math library. -/
+/-- Reassembling 8 LE bytes back into a 64-bit value is the identity. -/
+private theorem le_byte_reassemble_bv (v : BitVec 64) :
+    (v.setWidth 8).setWidth 64 |||
+    ((v >>> 8).setWidth 8).setWidth 64 <<< (8#64 % 64#64) |||
+    ((v >>> 16).setWidth 8).setWidth 64 <<< (16#64 % 64#64) |||
+    ((v >>> 24).setWidth 8).setWidth 64 <<< (24#64 % 64#64) |||
+    ((v >>> 32).setWidth 8).setWidth 64 <<< (32#64 % 64#64) |||
+    ((v >>> 40).setWidth 8).setWidth 64 <<< (40#64 % 64#64) |||
+    ((v >>> 48).setWidth 8).setWidth 64 <<< (48#64 % 64#64) |||
+    ((v >>> 56).setWidth 8).setWidth 64 <<< (56#64 % 64#64) = v := by
+  bv_decide
+
+set_option maxHeartbeats 200000000 in
 theorem ssz_roundtrip_uint64 (v : UInt64) :
-    SszDecode.sszDecode (SszEncode.sszEncode v) = .ok v := by sorry
+    SszDecode.sszDecode (SszEncode.sszEncode v) = .ok v := by
+  simp only [SszEncode.sszEncode, SszDecode.sszDecode, encodeUInt64, decodeUInt64At]
+  simp only [ByteArray.size, Array.size, List.length]
+  simp (config := { decide := true }) only []
+  simp only [ByteArray.get!, ite_true, ite_false]
+  simp
+  change UInt64.ofBitVec _ = UInt64.ofBitVec _
+  congr 1
+  simp only [UInt64.toBitVec_or, UInt64.toBitVec_and, UInt64.toBitVec_shiftLeft,
+             UInt64.ofNat, UInt64.toNat, UInt64.toBitVec_ofNat]
+  rw [ofNat64_mod256_and255, ofNat64_shr_mod256_and255, ofNat64_shr_mod256_and255,
+      ofNat64_shr_mod256_and255, ofNat64_shr_mod256_and255, ofNat64_shr_mod256_and255,
+      ofNat64_shr_mod256_and255, ofNat64_shr_mod256_and255]
+  exact le_byte_reassemble_bv v.toBitVec
 
 -- ════════════════════════════════════════════════════════════════
 -- BytesN roundtrip
@@ -73,26 +103,23 @@ theorem ssz_roundtrip_bytesN {n : Nat} (b : BytesN n) :
 -- Container roundtrip proofs
 -- ════════════════════════════════════════════════════════════════
 
-/- Container proofs are structurally similar but rely on unfolding
-   derive-generated SszEncode/SszDecode instances. The derive handlers
-   generate code using SszEncoder (two-pass) and SszDecoder (Except.bind
-   chains), which produce large terms that simp struggles with.
+/- Container roundtrip proofs require unfolding derive-generated SszEncode/SszDecode
+   instances. The derive handlers generate code using SszEncoder (two-pass) and
+   SszDecoder (Except.bind chains), producing terms with nested Array.foldl over
+   FieldEntry arrays that are too large for Lean's simplifier to reduce efficiently.
 
-   Each proof would need to:
-   1. Show SszEncoder.finalize produces the correct byte layout
-   2. Show SszDecoder reads back each field correctly
-   3. Compose field-level roundtrip proofs
+   Each proof would structurally proceed as:
+   1. Show SszEncoder.finalize on the field entries produces the correct concatenation
+   2. Show SszDecoder.readFixed slices at the correct offsets
+   3. Apply field-level roundtrip proofs (ssz_roundtrip_uint64, ssz_roundtrip_bytesN)
+   4. Compose via struct extensionality
 
-   For all-fixed containers like Checkpoint (8 + 32 = 40 bytes),
-   the encode is a simple concatenation and decode slices at
-   known offsets. The proof reduces to:
-   - Showing extract boundaries are correct
-   - Applying field-level roundtrip proofs (UInt64, BytesN)
-   - Showing struct equality from field equality
+   Proving these requires either:
+   - Custom simp lemmas for SszEncoder/SszDecoder that short-circuit the foldl expansion
+   - A reflection-based tactic that reasons about the two-pass structure directly
+   - Derive-generated proof terms alongside the encode/decode instances
 
-   The key blocker is that UInt64 roundtrip (ssz_roundtrip_uint64)
-   remains unproven, so even if the container plumbing is verified,
-   the Slot/ValidatorIndex fields would need sorry. -/
+   These are deferred to a future phase focused on proof infrastructure. -/
 
 theorem ssz_roundtrip_checkpoint (c : Checkpoint) :
     SszDecode.sszDecode (SszEncode.sszEncode c) = .ok c := by sorry
