@@ -17,6 +17,7 @@ import Test.Consensus.Signing
 import Test.Crypto.LeanSig
 import Test.Crypto.KeyState
 import Test.Crypto.LeanMultisig
+import Test.Actor
 import Test.Consensus.StateTransition
 
 def main : IO Unit := do
@@ -73,6 +74,10 @@ def main : IO Unit := do
 
   -- Crypto LeanMultisig tests
   let (t, f) ← Test.Crypto.LeanMultisig.runTests
+  total := total + t; failures := failures + f
+
+  -- Actor framework tests
+  let (t, f) ← Test.Actor.runTests
   total := total + t; failures := failures + f
 
   -- State Transition tests
