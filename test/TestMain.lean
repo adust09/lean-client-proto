@@ -18,6 +18,7 @@ import Test.Crypto.LeanSig
 import Test.Crypto.KeyState
 import Test.Crypto.LeanMultisig
 import Test.Actor
+import Test.Consensus.StateTransition
 
 def main : IO Unit := do
   IO.println "═══════════════════════════════════════════"
@@ -77,6 +78,10 @@ def main : IO Unit := do
 
   -- Actor framework tests
   let (t, f) ← Test.Actor.runTests
+  total := total + t; failures := failures + f
+
+  -- State Transition tests
+  let (t, f) ← Test.Consensus.StateTransition.runTests
   total := total + t; failures := failures + f
 
   IO.println "═══════════════════════════════════════════"
