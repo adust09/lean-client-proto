@@ -14,6 +14,7 @@ import LeanConsensus.Consensus.Signing
 import LeanConsensus.Crypto.KeyState
 import LeanConsensus.SSZ.BytesN
 import LeanConsensus.SSZ.List
+import LeanConsensus.Metrics
 
 namespace LeanConsensus.Actor.ValidatorActor
 
@@ -22,6 +23,7 @@ open LeanConsensus.Actor.Messages
 open LeanConsensus.Consensus
 open LeanConsensus.Crypto.KeyState
 open LeanConsensus.SSZ
+open LeanConsensus.Metrics
 
 -- ════════════════════════════════════════════════════════════════
 -- Configuration
@@ -40,8 +42,9 @@ structure ValidatorConfig where
 
 /-- Internal state of the validator actor. -/
 structure ValidatorActorState where
-  config : ValidatorConfig
-  p2p    : ActorHandle P2PActorMsg
+  config  : ValidatorConfig
+  p2p     : ActorHandle P2PActorMsg
+  metrics : Option BeaconMetrics := none
 
 -- ════════════════════════════════════════════════════════════════
 -- Block Proposal
@@ -75,6 +78,8 @@ private def handleProposeBlock (state : ValidatorActorState)
       else BytesN.zero XMSS_SIGNATURE_SIZE
     let signedBlock : SignedBeaconBlock := { block, signature }
     send state.p2p (.publishBlock signedBlock)
+    if let some m := state.metrics then
+      m.blocksProposed.increment
   catch e =>
     IO.eprintln s!"[validator] block signing failed: {e}"
 
@@ -118,6 +123,8 @@ private def handleAttestSlot (state : ValidatorActorState)
       aggregationProof := { data := ByteArray.empty }
     }
     send state.p2p (.publishAttestation aggAtt)
+    if let some m := state.metrics then
+      m.attestationsProduced.increment
   catch e =>
     IO.eprintln s!"[validator] attestation signing failed: {e}"
 
@@ -160,9 +167,10 @@ private def validatorHandler (state : ValidatorActorState)
 /-- Spawn the validator actor with the given configuration.
     The validator will process duties and sign blocks/attestations. -/
 def spawnValidatorActor (config : ValidatorConfig)
-    (p2p : ActorHandle P2PActorMsg) :
+    (p2p : ActorHandle P2PActorMsg)
+    (metrics : Option BeaconMetrics := none) :
     IO (ActorHandle ValidatorActorMsg) := do
-  let state : ValidatorActorState := { config, p2p }
+  let state : ValidatorActorState := { config, p2p, metrics }
   spawnActor fun msg => validatorHandler state msg
 
 end LeanConsensus.Actor.ValidatorActor

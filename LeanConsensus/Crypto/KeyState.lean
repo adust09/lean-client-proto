@@ -154,4 +154,22 @@ def getLastEpoch (ks : KeyState) : IO (Option UInt32) := do
   let inner ← ks.ref.get
   return inner.lastEpoch
 
+/-- Generate a new key state and persist to the given path.
+    Alias for `create` with sensible defaults. -/
+def generate (keyPath : System.FilePath) : IO KeyState :=
+  create 0 1024 keyPath
+
+/-- Create an ephemeral (in-memory only) key state for non-validator mode.
+    The key is generated but not persisted to disk. -/
+def ephemeral : IO KeyState := do
+  let (sk, pk) ← keygen 0 1024
+  let inner : KeyStateInner := {
+    privateKey := sk
+    publicKey := pk
+    lastEpoch := none
+    keyPath := "/dev/null"
+  }
+  let ref ← IO.mkRef inner
+  return { ref }
+
 end LeanConsensus.Crypto.KeyState

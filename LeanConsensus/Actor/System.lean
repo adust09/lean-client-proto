@@ -14,6 +14,8 @@ import LeanConsensus.Actor.BlockchainActor
 import LeanConsensus.Actor.ValidatorActor
 import LeanConsensus.Network.P2P
 import LeanConsensus.Consensus.Types
+import LeanConsensus.Storage
+import LeanConsensus.Metrics
 
 namespace LeanConsensus.Actor.System
 
@@ -24,6 +26,8 @@ open LeanConsensus.Actor.BlockchainActor
 open LeanConsensus.Actor.ValidatorActor
 open LeanConsensus.Network.P2P
 open LeanConsensus.Consensus
+open LeanConsensus.Storage
+open LeanConsensus.Metrics
 open LeanConsensus.SSZ
 
 -- ════════════════════════════════════════════════════════════════
@@ -32,12 +36,14 @@ open LeanConsensus.SSZ
 
 /-- Configuration for the full actor system. -/
 structure ActorSystemConfig where
-  p2pConfig      : P2PConfig
+  p2pConfig       : P2PConfig
   validatorConfig : ValidatorConfig
-  genesisState   : BeaconState
-  genesisBlock   : BeaconBlock
-  startSlot      : UInt64 := 0
-  slotIntervalMs : UInt32 := 4000
+  genesisState    : BeaconState
+  genesisBlock    : BeaconBlock
+  storage         : Option StorageBackend := none
+  metrics         : Option BeaconMetrics := none
+  startSlot       : UInt64 := 0
+  slotIntervalMs  : UInt32 := 4000
 
 -- ════════════════════════════════════════════════════════════════
 -- Actor System
@@ -72,11 +78,12 @@ def startActorSystem (config : ActorSystemConfig) : IO ActorSystem := do
   let dummyP2P ← spawnActor (msg := P2PActorMsg) fun _ => return true
 
   -- 3. Spawn validator actor (needs P2P handle for publishing)
-  let validatorActor ← spawnValidatorActor config.validatorConfig dummyP2P
+  let validatorActor ← spawnValidatorActor config.validatorConfig dummyP2P config.metrics
 
   -- 4. Spawn blockchain actor (needs validator + P2P handles)
   let blockchainActor ← spawnBlockchainActor
     config.genesisState config.genesisBlock validatorActor dummyP2P
+    config.storage config.metrics
 
   -- 5. Shut down dummy P2P and spawn real one (with blockchain handle)
   shutdown dummyP2P

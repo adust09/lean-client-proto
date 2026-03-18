@@ -12,6 +12,8 @@ import LeanConsensus.Actor
 import LeanConsensus.Actor.Messages
 import LeanConsensus.Consensus.ForkChoice
 import LeanConsensus.Consensus.StateTransition
+import LeanConsensus.Storage
+import LeanConsensus.Metrics
 
 namespace LeanConsensus.Actor.BlockchainActor
 
@@ -21,6 +23,8 @@ open LeanConsensus.Consensus
 open LeanConsensus.Consensus.ForkChoice
 open LeanConsensus.Consensus.StateTransition
 open LeanConsensus.SSZ
+open LeanConsensus.Storage
+open LeanConsensus.Metrics
 
 -- ════════════════════════════════════════════════════════════════
 -- State
@@ -31,6 +35,8 @@ structure BlockchainActorState where
   store     : IO.Ref Store
   validator : ActorHandle ValidatorActorMsg
   p2p       : ActorHandle P2PActorMsg
+  storage   : Option StorageBackend := none
+  metrics   : Option BeaconMetrics := none
 
 -- ════════════════════════════════════════════════════════════════
 -- Block Handling
@@ -44,6 +50,13 @@ private def handleNewBlock (state : BlockchainActorState)
   | .ok newStore =>
     state.store.set newStore
     let root := blockRoot signed.block
+    -- Persist block to storage
+    if let some sb := state.storage then
+      sb.putBlock root signed.block
+    -- Update metrics
+    if let some m := state.metrics then
+      m.blocksImported.increment
+      m.headSlot.set signed.block.slot.toNat
     send state.validator (.blockImported root signed.block.slot)
   | .error e =>
     IO.eprintln s!"[blockchain] block rejected: {e}"
@@ -59,6 +72,8 @@ private def handleNewAttestation (state : BlockchainActorState)
   match onAttestation store att.validatorIndex att.data with
   | .ok newStore =>
     state.store.set newStore
+    if let some m := state.metrics then
+      m.attestationsImported.increment
   | .error e =>
     IO.eprintln s!"[blockchain] attestation rejected: {e}"
 
@@ -108,10 +123,12 @@ private def blockchainHandler (state : BlockchainActorState)
 def spawnBlockchainActor (genesisState : BeaconState)
     (genesisBlock : BeaconBlock)
     (validator : ActorHandle ValidatorActorMsg)
-    (p2p : ActorHandle P2PActorMsg) :
+    (p2p : ActorHandle P2PActorMsg)
+    (storage : Option StorageBackend := none)
+    (metrics : Option BeaconMetrics := none) :
     IO (ActorHandle BlockchainActorMsg) := do
   let store ← IO.mkRef (initStore genesisState genesisBlock)
-  let state : BlockchainActorState := { store, validator, p2p }
+  let state : BlockchainActorState := { store, validator, p2p, storage, metrics }
   spawnActor fun msg => blockchainHandler state msg
 
 /-- Get the current head root from the blockchain actor's store. -/

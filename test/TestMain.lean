@@ -25,6 +25,10 @@ import Test.Network.BeaconAPI
 import Test.Network.P2P
 import Test.Consensus.Aggregator
 import Test.Actor.WireActors
+import Test.Metrics
+import Test.Storage
+import Test.Genesis
+import Test.Config
 
 def main : IO Unit := do
   IO.println "═══════════════════════════════════════════"
@@ -112,6 +116,22 @@ def main : IO Unit := do
 
   -- Wire Actor tests
   let (t, f) ← Test.Actor.WireActors.runTests
+  total := total + t; failures := failures + f
+
+  -- Metrics tests
+  let (t, f) ← Test.Metrics.runTests
+  total := total + t; failures := failures + f
+
+  -- Storage tests
+  let (t, f) ← Test.Storage.runTests
+  total := total + t; failures := failures + f
+
+  -- Genesis tests
+  let (t, f) ← Test.Genesis.runTests
+  total := total + t; failures := failures + f
+
+  -- Config tests
+  let (t, f) ← Test.Config.runTests
   total := total + t; failures := failures + f
 
   IO.println "═══════════════════════════════════════════"
