@@ -38,8 +38,8 @@ open LeanConsensus.SSZ
 structure ActorSystemConfig where
   p2pConfig       : P2PConfig
   validatorConfig : ValidatorConfig
-  genesisState    : BeaconState
-  genesisBlock    : BeaconBlock
+  genesisState    : State
+  genesisBlock    : Block
   storage         : Option StorageBackend := none
   metrics         : Option BeaconMetrics := none
   startSlot       : UInt64 := 0

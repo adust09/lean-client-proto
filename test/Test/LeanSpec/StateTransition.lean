@@ -1,7 +1,7 @@
 /-
   State transition tests using leanSpec-generated fixtures.
 
-  Due to type divergence (leanSpec State vs our BeaconState), we test:
+  With aligned types, we test:
   1. Fixture JSON parsing succeeds
   2. Block fields parse correctly
   3. Post-state slot expectations match block sequence

@@ -22,9 +22,9 @@ def check (name : String) (condition : Bool) : IO (Nat × Nat) := do
 /-- Create a test AttestationData for the given slot. -/
 private def mkTestAttData (slot : UInt64) : AttestationData := {
   slot := slot
-  headRoot := BytesN.zero 32
-  sourceCheckpoint := { slot := 0, root := BytesN.zero 32 }
-  targetCheckpoint := { slot := slot, root := BytesN.zero 32 }
+  head := { root := BytesN.zero 32, slot := 0 }
+  source := { root := BytesN.zero 32, slot := 0 }
+  target := { root := BytesN.zero 32, slot := slot }
 }
 
 /-- Create a test SignedAttestation with the given validator index. -/

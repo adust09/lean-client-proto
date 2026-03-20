@@ -38,17 +38,25 @@ abbrev Root           := Bytes32
 abbrev Domain         := Bytes32
 abbrev Version        := Bytes4
 
--- Cryptographic type aliases
-abbrev XmssPubkey    := BytesN XMSS_PUBKEY_SIZE
-abbrev XmssSignature := BytesN XMSS_SIGNATURE_SIZE
+-- Cryptographic type aliases (using literals for derive macro compatibility)
+abbrev XmssPubkey    := BytesN 52
+abbrev XmssSignature := BytesN 424
+
+-- ════════════════════════════════════════════════════════════════
+-- Config
+-- ════════════════════════════════════════════════════════════════
+
+structure Config where
+  genesisTime : UInt64
+  deriving BEq, SszType, SszEncode, SszDecode, SszHashTreeRoot
 
 -- ════════════════════════════════════════════════════════════════
 -- Checkpoint
 -- ════════════════════════════════════════════════════════════════
 
 structure Checkpoint where
-  slot : Slot
   root : Root
+  slot : Slot
   deriving BEq, SszType, SszEncode, SszDecode, SszHashTreeRoot
 
 -- ════════════════════════════════════════════════════════════════
@@ -56,10 +64,73 @@ structure Checkpoint where
 -- ════════════════════════════════════════════════════════════════
 
 structure AttestationData where
-  slot             : Slot
-  headRoot         : Root
-  sourceCheckpoint : Checkpoint
-  targetCheckpoint : Checkpoint
+  slot   : Slot
+  head   : Checkpoint
+  target : Checkpoint
+  source : Checkpoint
+  deriving BEq, SszType, SszEncode, SszDecode, SszHashTreeRoot
+
+-- ════════════════════════════════════════════════════════════════
+-- Validator
+-- ════════════════════════════════════════════════════════════════
+
+structure Validator where
+  attestationPubkey : BytesN 52
+  proposalPubkey    : BytesN 52
+  index             : ValidatorIndex
+  deriving BEq, SszType, SszEncode, SszDecode, SszHashTreeRoot
+
+-- ════════════════════════════════════════════════════════════════
+-- AggregationBits
+-- ════════════════════════════════════════════════════════════════
+
+abbrev AggregationBits := Bitlist VALIDATOR_REGISTRY_LIMIT
+
+-- ════════════════════════════════════════════════════════════════
+-- ByteListMiB (manual SSZ — variable-size bounded byte list)
+-- ════════════════════════════════════════════════════════════════
+
+structure ByteListMiB where
+  data : ByteArray
+  hbound : data.size ≤ 1048576
+
+instance : BEq ByteListMiB where
+  beq a b := a.data == b.data
+
+instance : SszType ByteListMiB where
+  sszFixedSize := none
+
+instance : SszEncode ByteListMiB where
+  sszEncode b := b.data
+
+instance : SszDecode ByteListMiB where
+  sszDecode data :=
+    if h : data.size ≤ 1048576 then
+      .ok ⟨data, h⟩
+    else
+      .error (.other "ByteListMiB exceeds 1 MiB")
+
+instance : SszHashTreeRoot ByteListMiB where
+  hashTreeRoot b :=
+    let chunks := pack b.data
+    mixInLength (merkleize chunks (chunkCountVariable 1048576)) b.data.size
+
+-- ════════════════════════════════════════════════════════════════
+-- AggregatedSignatureProof
+-- ════════════════════════════════════════════════════════════════
+
+structure AggregatedSignatureProof where
+  participants : AggregationBits
+  proofData    : ByteListMiB
+  deriving BEq, SszType, SszEncode, SszDecode, SszHashTreeRoot
+
+-- ════════════════════════════════════════════════════════════════
+-- Attestation (single-validator, unsigned)
+-- ════════════════════════════════════════════════════════════════
+
+structure Attestation where
+  data           : AttestationData
+  validatorIndex : ValidatorIndex
   deriving BEq, SszType, SszEncode, SszDecode, SszHashTreeRoot
 
 -- ════════════════════════════════════════════════════════════════
@@ -73,83 +144,59 @@ structure SignedAttestation where
   deriving BEq, SszType, SszEncode, SszDecode, SszHashTreeRoot
 
 -- ════════════════════════════════════════════════════════════════
--- LeanMultisigProof (manual — opaque ByteArray wrapper, non-standard)
+-- AggregatedAttestation
 -- ════════════════════════════════════════════════════════════════
 
-structure LeanMultisigProof where
-  data : ByteArray
-  deriving BEq
-
-instance : SszType LeanMultisigProof where
-  sszFixedSize := none
-
-instance : SszEncode LeanMultisigProof where
-  sszEncode p := p.data
-
-instance : SszDecode LeanMultisigProof where
-  sszDecode data := .ok { data }
-
-instance : SszHashTreeRoot LeanMultisigProof where
-  hashTreeRoot p :=
-    let chunks := pack p.data
-    merkleize chunks chunks.size
+structure AggregatedAttestation where
+  aggregationBits : AggregationBits
+  data            : AttestationData
+  deriving BEq, SszType, SszEncode, SszDecode, SszHashTreeRoot
 
 -- ════════════════════════════════════════════════════════════════
 -- SignedAggregatedAttestation
 -- ════════════════════════════════════════════════════════════════
 
 structure SignedAggregatedAttestation where
-  data             : AttestationData
-  aggregationBits  : Bitlist MAX_VALIDATORS_PER_SUBNET
-  aggregationProof : LeanMultisigProof
+  data  : AttestationData
+  proof : AggregatedSignatureProof
   deriving BEq, SszType, SszEncode, SszDecode, SszHashTreeRoot
 
 -- ════════════════════════════════════════════════════════════════
--- BeaconBlockBody (manual — single-field direct delegation, non-standard)
+-- BlockBody (manual — single-field direct delegation, non-standard)
 -- ════════════════════════════════════════════════════════════════
 
-structure BeaconBlockBody where
-  attestations : SszList MAX_ATTESTATIONS SignedAggregatedAttestation
-  deriving BEq
-
-instance : SszType BeaconBlockBody where
-  sszFixedSize := none
-
-instance : SszEncode BeaconBlockBody where
-  sszEncode body := SszEncode.sszEncode body.attestations
-
-instance : SszDecode BeaconBlockBody where
-  sszDecode data := do
-    let attestations ← SszDecode.sszDecode data
-    .ok { attestations }
-
-instance : SszHashTreeRoot BeaconBlockBody where
-  hashTreeRoot body :=
-    let attHashes := body.attestations.elems.map SszHashTreeRoot.hashTreeRoot
-    let attRoot := mixInLength
-      (merkleize attHashes (chunkCountVariable MAX_ATTESTATIONS))
-      body.attestations.elems.size
-    merkleize #[attRoot] 1
+structure BlockBody where
+  attestations : SszList MAX_ATTESTATIONS AggregatedAttestation
+  deriving BEq, SszType, SszEncode, SszDecode, SszHashTreeRoot
 
 -- ════════════════════════════════════════════════════════════════
--- BeaconBlock
+-- Block (renamed from BeaconBlock)
 -- ════════════════════════════════════════════════════════════════
 
-structure BeaconBlock where
+structure Block where
   slot          : Slot
   proposerIndex : ValidatorIndex
   parentRoot    : Root
   stateRoot     : Root
-  body          : BeaconBlockBody
+  body          : BlockBody
   deriving BEq, SszType, SszEncode, SszDecode, SszHashTreeRoot
 
 -- ════════════════════════════════════════════════════════════════
--- SignedBeaconBlock
+-- BlockSignatures
 -- ════════════════════════════════════════════════════════════════
 
-structure SignedBeaconBlock where
-  block     : BeaconBlock
-  signature : XmssSignature
+structure BlockSignatures where
+  attestationSignatures : SszList MAX_ATTESTATIONS AggregatedSignatureProof
+  proposerSignature     : XmssSignature
+  deriving BEq, SszType, SszEncode, SszDecode, SszHashTreeRoot
+
+-- ════════════════════════════════════════════════════════════════
+-- SignedBlock (renamed from SignedBeaconBlock)
+-- ════════════════════════════════════════════════════════════════
+
+structure SignedBlock where
+  message   : Block
+  signature : BlockSignatures
   deriving BEq, SszType, SszEncode, SszDecode, SszHashTreeRoot
 
 -- ════════════════════════════════════════════════════════════════
@@ -165,32 +212,20 @@ structure BeaconBlockHeader where
   deriving BEq, SszType, SszEncode, SszDecode, SszHashTreeRoot
 
 -- ════════════════════════════════════════════════════════════════
--- Validator
+-- State (renamed from BeaconState)
 -- ════════════════════════════════════════════════════════════════
 
-structure Validator where
-  pubkey           : XmssPubkey
-  effectiveBalance : Gwei
-  slashed          : Bool
-  activationSlot   : Slot
-  exitSlot         : Slot
-  withdrawableSlot : Slot
-  deriving BEq, SszType, SszEncode, SszDecode, SszHashTreeRoot
-
--- ════════════════════════════════════════════════════════════════
--- BeaconState
--- ════════════════════════════════════════════════════════════════
-
-structure BeaconState where
-  slot                : Slot
-  latestBlockHeader   : BeaconBlockHeader
-  blockRoots          : SszVector SLOTS_PER_HISTORICAL_ROOT Root
-  stateRoots          : SszVector SLOTS_PER_HISTORICAL_ROOT Root
-  validators          : SszList VALIDATOR_REGISTRY_LIMIT Validator
-  balances            : SszList VALIDATOR_REGISTRY_LIMIT Gwei
-  justifiedCheckpoint : Checkpoint
-  finalizedCheckpoint : Checkpoint
-  currentAttestations : SszList MAX_ATTESTATIONS_STATE SignedAggregatedAttestation
+structure State where
+  config                   : Config
+  slot                     : Slot
+  latestBlockHeader        : BeaconBlockHeader
+  latestJustified          : Checkpoint
+  latestFinalized          : Checkpoint
+  historicalBlockHashes    : SszList HISTORICAL_ROOTS_LIMIT Root
+  justifiedSlots           : Bitlist HISTORICAL_ROOTS_LIMIT
+  validators               : SszList VALIDATOR_REGISTRY_LIMIT Validator
+  justificationsRoots      : SszList HISTORICAL_ROOTS_LIMIT Root
+  justificationsValidators : Bitlist (HISTORICAL_ROOTS_LIMIT * VALIDATOR_REGISTRY_LIMIT)
   deriving BEq, SszType, SszEncode, SszDecode, SszHashTreeRoot
 
 -- ════════════════════════════════════════════════════════════════
@@ -203,11 +238,15 @@ structure LatestMessage where
   deriving BEq
 
 structure Store where
-  justifiedCheckpoint : Checkpoint
-  finalizedCheckpoint : Checkpoint
-  blocks              : Std.HashMap Root BeaconBlock
-  blockStates         : Std.HashMap Root BeaconState
-  latestMessages      : Std.HashMap ValidatorIndex LatestMessage
-  currentSlot         : Slot
+  time                  : UInt64
+  config                : Config
+  head                  : Root
+  safeTarget            : Root
+  latestJustified       : Checkpoint
+  latestFinalized       : Checkpoint
+  blocks                : Std.HashMap Root Block
+  states                : Std.HashMap Root State
+  validatorId           : Option ValidatorIndex
+  latestMessages        : Std.HashMap ValidatorIndex LatestMessage
 
 end LeanConsensus.Consensus

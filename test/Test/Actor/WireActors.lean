@@ -75,7 +75,6 @@ def runTests : IO (Nat × Nat) := do
     let blockCount ← IO.mkRef (0 : Nat)
     let attCount ← IO.mkRef (0 : Nat)
 
-    -- Mock blockchain actor that counts messages
     let blockchain ← spawnActor (msg := BlockchainActorMsg) fun msg => do
       match msg with
       | .newBlock _ => blockCount.modify (· + 1); return true
@@ -83,7 +82,6 @@ def runTests : IO (Nat × Nat) := do
       | .shutdown => return false
       | _ => return true
 
-    -- Mock P2P actor that forwards to blockchain
     let p2pActor ← spawnActor (msg := P2PActorMsg) fun msg => do
       match msg with
       | .networkBlock block =>
@@ -95,27 +93,31 @@ def runTests : IO (Nat × Nat) := do
       | .shutdown => return false
       | _ => return true
 
-    -- Create a mock signed block
-    let emptyAtts : SszList MAX_ATTESTATIONS SignedAggregatedAttestation :=
+    let emptyAtts : SszList MAX_ATTESTATIONS AggregatedAttestation :=
       ⟨#[], Nat.zero_le _⟩
-    let block : SignedBeaconBlock := {
-      block := {
+    let emptyProofs : SszList MAX_ATTESTATIONS AggregatedSignatureProof :=
+      ⟨#[], Nat.zero_le _⟩
+    let block : SignedBlock := {
+      message := {
         slot := 1
         proposerIndex := 0
         parentRoot := BytesN.zero 32
         stateRoot := BytesN.zero 32
         body := { attestations := emptyAtts }
       }
-      signature := BytesN.zero XMSS_SIGNATURE_SIZE
+      signature := {
+        attestationSignatures := emptyProofs
+        proposerSignature := BytesN.zero XMSS_SIGNATURE_SIZE
+      }
     }
 
-    -- Create a mock attestation
+    let zeroCheckpoint : Checkpoint := { root := BytesN.zero 32, slot := 0 }
     let att : SignedAttestation := {
       data := {
         slot := 1
-        headRoot := BytesN.zero 32
-        sourceCheckpoint := { slot := 0, root := BytesN.zero 32 }
-        targetCheckpoint := { slot := 1, root := BytesN.zero 32 }
+        head := zeroCheckpoint
+        source := zeroCheckpoint
+        target := { root := BytesN.zero 32, slot := 1 }
       }
       validatorIndex := 0
       signature := BytesN.zero XMSS_SIGNATURE_SIZE
@@ -179,8 +181,7 @@ def runTests : IO (Nat × Nat) := do
     let blockchain ← spawnActor (msg := BlockchainActorMsg) fun msg => do
       match msg with
       | .newBlock block =>
-        -- Simulate block import notification to validator
-        send validator (.blockImported (BytesN.zero 32) block.block.slot)
+        send validator (.blockImported (BytesN.zero 32) block.message.slot)
         return true
       | .shutdown => return false
       | _ => return true
@@ -193,17 +194,22 @@ def runTests : IO (Nat × Nat) := do
       | .shutdown => return false
       | _ => return true
 
-    let emptyAtts : SszList MAX_ATTESTATIONS SignedAggregatedAttestation :=
+    let emptyAtts : SszList MAX_ATTESTATIONS AggregatedAttestation :=
       ⟨#[], Nat.zero_le _⟩
-    let block : SignedBeaconBlock := {
-      block := {
+    let emptyProofs : SszList MAX_ATTESTATIONS AggregatedSignatureProof :=
+      ⟨#[], Nat.zero_le _⟩
+    let block : SignedBlock := {
+      message := {
         slot := 5
         proposerIndex := 0
         parentRoot := BytesN.zero 32
         stateRoot := BytesN.zero 32
         body := { attestations := emptyAtts }
       }
-      signature := BytesN.zero XMSS_SIGNATURE_SIZE
+      signature := {
+        attestationSignatures := emptyProofs
+        proposerSignature := BytesN.zero XMSS_SIGNATURE_SIZE
+      }
     }
 
     send p2pActor (.networkBlock block)

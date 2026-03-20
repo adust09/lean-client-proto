@@ -23,17 +23,16 @@ def runTests : IO (Nat × Nat) := do
   let mut total := 0
   let mut failures := 0
 
-  let cp : Checkpoint := { slot := 0, root := Bytes32.zero }
+  let cp : Checkpoint := { root := Bytes32.zero, slot := 0 }
   let encoded := SszEncode.sszEncode cp
   let (t, f) ← check "Checkpoint encode size = 40" (encoded.size == 40)
   total := total + t; failures := failures + f
 
   let ad : AttestationData := {
-    slot := 1, headRoot := Bytes32.zero
-    sourceCheckpoint := cp, targetCheckpoint := cp
+    slot := 1, head := cp, target := cp, source := cp
   }
   let encoded := SszEncode.sszEncode ad
-  let (t, f) ← check "AttestationData encode size = 120" (encoded.size == 120)
+  let (t, f) ← check "AttestationData encode size = 128" (encoded.size == 128)
   total := total + t; failures := failures + f
 
   let hdr : BeaconBlockHeader := {
@@ -45,14 +44,12 @@ def runTests : IO (Nat × Nat) := do
   total := total + t; failures := failures + f
 
   let val : Validator := {
-    pubkey := BytesN.zero XMSS_PUBKEY_SIZE
-    effectiveBalance := 32000000000, slashed := false
-    activationSlot := 0
-    exitSlot := 0xFFFFFFFFFFFFFFFF
-    withdrawableSlot := 0xFFFFFFFFFFFFFFFF
+    attestationPubkey := BytesN.zero XMSS_PUBKEY_SIZE
+    proposalPubkey := BytesN.zero XMSS_PUBKEY_SIZE
+    index := 0
   }
   let encoded := SszEncode.sszEncode val
-  let (t, f) ← check "Validator encode size = 65" (encoded.size == 65)
+  let (t, f) ← check "Validator encode size = 112" (encoded.size == 112)
   total := total + t; failures := failures + f
 
   let sa : SignedAttestation := {
@@ -60,14 +57,14 @@ def runTests : IO (Nat × Nat) := do
     signature := BytesN.zero XMSS_SIGNATURE_SIZE
   }
   let encoded := SszEncode.sszEncode sa
-  let (t, f) ← check "SignedAttestation encode size = 3240" (encoded.size == 3240)
+  let (t, f) ← check "SignedAttestation encode size = 560" (encoded.size == 560)
   total := total + t; failures := failures + f
 
   let (t, f) ← check "SECONDS_PER_SLOT = 4" (SECONDS_PER_SLOT == 4)
   total := total + t; failures := failures + f
   let (t, f) ← check "SLOTS_TO_FINALITY = 3" (SLOTS_TO_FINALITY == 3)
   total := total + t; failures := failures + f
-  let (t, f) ← check "XMSS_SIGNATURE_SIZE = 3112" (XMSS_SIGNATURE_SIZE == 3112)
+  let (t, f) ← check "XMSS_SIGNATURE_SIZE = 424" (XMSS_SIGNATURE_SIZE == 424)
   total := total + t; failures := failures + f
 
   return (total, failures)

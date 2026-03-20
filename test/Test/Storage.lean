@@ -21,8 +21,8 @@ private def check (name : String) (cond : Bool) : IO (Nat × Nat) := do
     return (1, 1)
 
 /-- Create a minimal test block with the given slot. -/
-private def mkTestBlock (slot : UInt64) : BeaconBlock :=
-  let emptyAtts : SszList MAX_ATTESTATIONS SignedAggregatedAttestation :=
+private def mkTestBlock (slot : UInt64) : Block :=
+  let emptyAtts : SszList MAX_ATTESTATIONS AggregatedAttestation :=
     ⟨#[], Nat.zero_le _⟩
   { slot := slot
     proposerIndex := 0
@@ -61,7 +61,6 @@ def runTests : IO (Nat × Nat) := do
 
   -- Storage backend operations (using temp directory)
   let tmpDir := System.FilePath.mk "/tmp/lean-consensus-test-storage"
-  -- Clean up any previous test run
   try IO.FS.removeDirAll tmpDir catch | _ => pure ()
   let config : StorageConfig := { dataDir := tmpDir }
   let sb ← StorageBackend.open config
@@ -94,14 +93,19 @@ def runTests : IO (Nat × Nat) := do
   total := total + t; failures := failures + f
 
   -- Store snapshot roundtrip
-  let checkpoint : Checkpoint := { slot := 10, root := mkRoot 10 }
+  let checkpoint : Checkpoint := { root := mkRoot 10, slot := 10 }
+  let cfg : Config := { genesisTime := 0 }
   let store : Store := {
-    justifiedCheckpoint := checkpoint
-    finalizedCheckpoint := { slot := 5, root := mkRoot 5 }
+    time := 100
+    config := cfg
+    head := mkRoot 10
+    safeTarget := mkRoot 10
+    latestJustified := checkpoint
+    latestFinalized := { root := mkRoot 5, slot := 5 }
     blocks := ∅
-    blockStates := ∅
+    states := ∅
+    validatorId := none
     latestMessages := ∅
-    currentSlot := 100
   }
   sb.saveStoreSnapshot store
   let loaded ← sb.loadStoreSnapshot

@@ -56,16 +56,16 @@ private def authHeaders (config : BeaconAPIConfig) : Array (String × String) :=
 
 /-- GET /eth/v2/beacon/blocks/{block_id}
     Retrieve a signed beacon block by ID (slot number, root, "head", "finalized", etc.).
-    Returns SSZ-decoded SignedBeaconBlock. -/
+    Returns SSZ-decoded SignedBlock. -/
 def getBlock (client : BeaconAPIClient) (blockId : String) :
-    IO (Except String SignedBeaconBlock) := do
+    IO (Except String SignedBlock) := do
   let path := s!"/eth/v2/beacon/blocks/{blockId}"
   let headers := authHeaders client.config ++
     #[("Accept", "application/octet-stream")]
   try
     let resp ← httpGet client.config.host client.config.port path headers
     if resp.statusCode == 200 then
-      match SszDecode.sszDecode (α := SignedBeaconBlock) resp.body with
+      match SszDecode.sszDecode (α := SignedBlock) resp.body with
       | .ok block => return .ok block
       | .error e => return .error s!"SSZ decode error: {e}"
     else if resp.statusCode == 404 then
@@ -77,7 +77,7 @@ def getBlock (client : BeaconAPIClient) (blockId : String) :
 
 /-- POST /eth/v2/beacon/blocks
     Submit a signed beacon block to the network. -/
-def submitBlock (client : BeaconAPIClient) (block : SignedBeaconBlock) :
+def submitBlock (client : BeaconAPIClient) (block : SignedBlock) :
     IO (Except String Unit) := do
   let path := "/eth/v2/beacon/blocks"
   let body := SszEncode.sszEncode block
@@ -175,8 +175,8 @@ def checkHealth (client : BeaconAPIClient) : IO Bool := do
 /-- GET /eth/v2/beacon/blocks/{slot} for a range of slots.
     Retrieve multiple blocks by slot range. Missing blocks are skipped. -/
 def getBlocksByRange (client : BeaconAPIClient) (startSlot : UInt64) (count : Nat) :
-    IO (Except String (Array SignedBeaconBlock)) := do
-  let mut blocks : Array SignedBeaconBlock := #[]
+    IO (Except String (Array SignedBlock)) := do
+  let mut blocks : Array SignedBlock := #[]
   for i in [:count] do
     let slot := startSlot + i.toUInt64
     match ← getBlock client (toString slot) with

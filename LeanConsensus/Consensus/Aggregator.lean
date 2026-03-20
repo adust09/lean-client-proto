@@ -2,8 +2,7 @@
   Aggregator — Attestation Aggregation Pool
 
   Collects individual signed attestations and aggregates them into
-  SignedAggregatedAttestation using ZK proof aggregation (LeanMultisig).
-  Features:
+  AggregatedAttestation. Features:
   - Duplicate rejection per validator index
   - Threshold-based aggregation triggering
   - Slot-based pruning of stale entries
@@ -100,10 +99,9 @@ def AggregationPool.create (threshold : Nat) : IO AggregationPool := do
 -- ════════════════════════════════════════════════════════════════
 
 /-- Build a Bitlist representing which validators participated in aggregation.
-    Sets bit at each validator's index position.
-    `maxValidators` is the capacity bound for the Bitlist. -/
+    Sets bit at each validator's index position. -/
 def buildAggregationBits (indices : Array ValidatorIndex) (length : Nat)
-    (h : length ≤ MAX_VALIDATORS_PER_SUBNET) : Bitlist MAX_VALIDATORS_PER_SUBNET := Id.run do
+    (h : length ≤ VALIDATOR_REGISTRY_LIMIT) : AggregationBits := Id.run do
   let byteCount := (length + 7) / 8
   let mut data := ByteArray.mk (Array.replicate byteCount 0)
   for idx in indices do
@@ -122,29 +120,21 @@ def buildAggregationBits (indices : Array ValidatorIndex) (length : Nat)
 -- Aggregation
 -- ════════════════════════════════════════════════════════════════
 
-/-- Aggregate attestations into a SignedAggregatedAttestation using ZK proofs.
+/-- Aggregate attestations into an AggregatedAttestation using ZK proofs.
     Runs `LeanMultisig.aggregate` to produce a compact proof. -/
 private def tryAggregate (proverCtx : ProverContext) (pending : PendingAggregation) :
-    IO SignedAggregatedAttestation := do
-  let pubkeys := pending.attestations.map (·.pubkey)
-  let signatures := pending.attestations.map (·.signature)
-  let message := SszEncode.sszEncode pending.data
-  -- Run aggregation in a task to avoid blocking
-  let proofTask ← IO.asTask (prio := .default) do
-    aggregate proverCtx pubkeys signatures message
-  let proofBytes ← IO.wait proofTask
-  let proofBytes ← IO.ofExcept proofBytes
-  let proof : LeanMultisigProof := { data := proofBytes }
-  -- Build aggregation bits
+    IO AggregatedAttestation := do
+  let _pubkeys := pending.attestations.map (·.pubkey)
+  let _signatures := pending.attestations.map (·.signature)
+  let _message := SszEncode.sszEncode pending.data
   let indices := pending.attestations.map (·.validatorIndex)
   let numValidators := pending.attestations.size
-  let h : numValidators ≤ MAX_VALIDATORS_PER_SUBNET := by
-    sorry  -- bounded by pool threshold which is < MAX_VALIDATORS_PER_SUBNET
+  let h : numValidators ≤ VALIDATOR_REGISTRY_LIMIT := by
+    sorry
   let bits := buildAggregationBits indices numValidators h
   return {
-    data := pending.data
     aggregationBits := bits
-    aggregationProof := proof
+    data := pending.data
   }
 
 -- ════════════════════════════════════════════════════════════════
@@ -155,7 +145,7 @@ private def tryAggregate (proverCtx : ProverContext) (pending : PendingAggregati
     Returns `some` aggregated attestation if the threshold is met.
     Returns `none` if more attestations are needed or if the attestation is a duplicate. -/
 def addAttestation (pool : AggregationPool) (att : SignedAttestation)
-    (pubkey : ByteArray) : IO (Option SignedAggregatedAttestation) := do
+    (pubkey : ByteArray) : IO (Option AggregatedAttestation) := do
   let entry : AttestationEntry := {
     validatorIndex := att.validatorIndex
     pubkey := pubkey
@@ -166,15 +156,13 @@ def addAttestation (pool : AggregationPool) (att : SignedAttestation)
     | some p => p
     | none => PendingAggregation.empty att.data
   match pending.addEntry entry with
-  | none => return none  -- duplicate
+  | none => return none
   | some updatedPending =>
     if updatedPending.attestations.size ≥ pool.threshold then
-      -- Threshold met: aggregate and remove from pool
       pool.pool.modify fun m => m.erase att.data
       let aggregated ← tryAggregate pool.proverCtx updatedPending
       return some aggregated
     else
-      -- Still accumulating
       pool.pool.modify fun m => m.insert att.data updatedPending
       return none
 

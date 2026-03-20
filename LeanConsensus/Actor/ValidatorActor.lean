@@ -54,29 +54,31 @@ structure ValidatorActorState where
     Creates a minimal block and signs it with the validator's XMSS key. -/
 private def handleProposeBlock (state : ValidatorActorState)
     (slot : UInt64) : IO Unit := do
-  -- Compute the signing domain for block proposals
   let domain := computeDomain DOMAIN_BEACON_PROPOSER
     state.config.forkVersion state.config.genesisRoot
-  -- Create a minimal block (in production, this would include
-  -- attestations from the pool and the correct parent/state roots)
-  let emptyAtts : SszList MAX_ATTESTATIONS SignedAggregatedAttestation :=
+  let emptyAtts : SszList MAX_ATTESTATIONS AggregatedAttestation :=
     ⟨#[], Nat.zero_le _⟩
-  let block : BeaconBlock := {
+  let block : Block := {
     slot := slot
     proposerIndex := state.config.validatorIndex
-    parentRoot := BytesN.zero 32  -- would be filled from fork choice head
-    stateRoot := BytesN.zero 32   -- would be filled after state transition
+    parentRoot := BytesN.zero 32
+    stateRoot := BytesN.zero 32
     body := { attestations := emptyAtts }
   }
-  -- Compute signing root and sign
   let signingRoot := computeSigningRoot block domain
   let epoch := (slot / SECONDS_PER_SLOT.toUInt64).toUInt32
   try
     let sigBytes ← signAndAdvance state.config.keyState epoch signingRoot.data
-    let signature : XmssSignature :=
+    let proposerSig : XmssSignature :=
       if h : sigBytes.size = XMSS_SIGNATURE_SIZE then ⟨sigBytes, h⟩
       else BytesN.zero XMSS_SIGNATURE_SIZE
-    let signedBlock : SignedBeaconBlock := { block, signature }
+    let emptyProofs : SszList MAX_ATTESTATIONS AggregatedSignatureProof :=
+      ⟨#[], Nat.zero_le _⟩
+    let blockSigs : BlockSignatures := {
+      attestationSignatures := emptyProofs
+      proposerSignature := proposerSig
+    }
+    let signedBlock : SignedBlock := { message := block, signature := blockSigs }
     send state.p2p (.publishBlock signedBlock)
     if let some m := state.metrics then
       m.blocksProposed.increment
@@ -93,13 +95,12 @@ private def handleAttestSlot (state : ValidatorActorState)
     (slot : UInt64) : IO Unit := do
   let domain := computeDomain DOMAIN_BEACON_ATTESTER
     state.config.forkVersion state.config.genesisRoot
-  -- Create attestation data (in production, head/source/target would
-  -- come from the fork choice store)
+  let zeroCheckpoint : Checkpoint := { root := BytesN.zero 32, slot := 0 }
   let attData : AttestationData := {
     slot := slot
-    headRoot := BytesN.zero 32  -- would be getHead from fork choice
-    sourceCheckpoint := { slot := 0, root := BytesN.zero 32 }
-    targetCheckpoint := { slot := slot, root := BytesN.zero 32 }
+    head := zeroCheckpoint
+    source := zeroCheckpoint
+    target := { root := BytesN.zero 32, slot := slot }
   }
   let signingRoot := computeSigningRoot attData domain
   let epoch := (slot / SECONDS_PER_SLOT.toUInt64).toUInt32
@@ -108,19 +109,20 @@ private def handleAttestSlot (state : ValidatorActorState)
     let signature : XmssSignature :=
       if h : sigBytes.size = XMSS_SIGNATURE_SIZE then ⟨sigBytes, h⟩
       else BytesN.zero XMSS_SIGNATURE_SIZE
-    let att : SignedAttestation := {
+    let _att : SignedAttestation := {
       data := attData
       validatorIndex := state.config.validatorIndex
       signature
     }
-    -- For publishing, we need an aggregated form. In the full pipeline,
-    -- this would go through the aggregation pool. For now, wrap as
-    -- a single-validator aggregated attestation.
-    let bits := Bitlist.zeros (maxCap := MAX_VALIDATORS_PER_SUBNET) 1 (by decide)
+    let emptyProofData : ByteListMiB := ⟨ByteArray.empty, by decide⟩
+    let emptyBits : AggregationBits := Bitlist.empty VALIDATOR_REGISTRY_LIMIT
+    let proof : AggregatedSignatureProof := {
+      participants := emptyBits
+      proofData := emptyProofData
+    }
     let aggAtt : SignedAggregatedAttestation := {
       data := attData
-      aggregationBits := bits
-      aggregationProof := { data := ByteArray.empty }
+      proof := proof
     }
     send state.p2p (.publishAttestation aggAtt)
     if let some m := state.metrics then
@@ -135,8 +137,6 @@ private def handleAttestSlot (state : ValidatorActorState)
 /-- Handle notification that a block was imported. -/
 private def handleBlockImported (_state : ValidatorActorState)
     (_root : BytesN 32) (_slot : UInt64) : IO Unit := do
-  -- In production, this would update the validator's view of the chain
-  -- and potentially trigger re-attestation or fork choice updates
   pure ()
 
 -- ════════════════════════════════════════════════════════════════

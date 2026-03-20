@@ -107,8 +107,8 @@ def parseArgs (args : List String) : Except String ClientConfig := do
 -- ════════════════════════════════════════════════════════════════
 
 /-- Convert a ClientConfig to an ActorSystemConfig for the actor system. -/
-def toActorSystemConfig (config : ClientConfig) (genesisState : BeaconState)
-    (genesisBlock : BeaconBlock) (keyState : KeyState) : ActorSystemConfig :=
+def toActorSystemConfig (config : ClientConfig) (genesisState : State)
+    (genesisBlock : Block) (keyState : KeyState) : ActorSystemConfig :=
   let beaconApiConfig : BeaconAPIConfig := {
     host := config.beaconApiHost
     port := config.beaconApiPort
