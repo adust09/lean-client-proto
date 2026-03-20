@@ -29,6 +29,9 @@ import Test.Metrics
 import Test.Storage
 import Test.Genesis
 import Test.Config
+import Test.LeanSpec.SSZ
+import Test.LeanSpec.StateTransition
+import Test.LeanSpec.ForkChoice
 
 def main : IO Unit := do
   IO.println "═══════════════════════════════════════════"
@@ -132,6 +135,18 @@ def main : IO Unit := do
 
   -- Config tests
   let (t, f) ← Test.Config.runTests
+  total := total + t; failures := failures + f
+
+  -- LeanSpec SSZ tests
+  let (t, f) ← Test.LeanSpec.SSZ.runTests
+  total := total + t; failures := failures + f
+
+  -- LeanSpec StateTransition tests
+  let (t, f) ← Test.LeanSpec.StateTransition.runTests
+  total := total + t; failures := failures + f
+
+  -- LeanSpec ForkChoice tests
+  let (t, f) ← Test.LeanSpec.ForkChoice.runTests
   total := total + t; failures := failures + f
 
   IO.println "═══════════════════════════════════════════"
