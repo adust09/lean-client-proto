@@ -2,8 +2,7 @@
   LeanSpec Fixture Bridge Types — JSON deserialization for leanSpec fixtures
 
   leanSpec generates JSON fixtures with camelCase keys and structures that
-  diverge from our domain types (e.g., Validator has attestation_pubkey +
-  proposal_pubkey + index vs our pubkey + effectiveBalance + slashed + slots).
+  match our aligned domain types.
 
   These types parse the fixture JSON and provide conversion where possible.
 -/

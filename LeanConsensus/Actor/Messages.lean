@@ -22,9 +22,9 @@ open LeanConsensus.SSZ
 /-- Messages handled by the P2P actor.
     Bridges between network events and internal consensus logic. -/
 inductive P2PActorMsg where
-  | networkBlock (block : SignedBeaconBlock)
+  | networkBlock (block : SignedBlock)
   | networkAttestation (att : SignedAttestation)
-  | publishBlock (block : SignedBeaconBlock)
+  | publishBlock (block : SignedBlock)
   | publishAttestation (att : SignedAggregatedAttestation)
   | shutdown
 
@@ -35,7 +35,7 @@ inductive P2PActorMsg where
 /-- Messages handled by the blockchain actor.
     Processes blocks, attestations, and slot advancement. -/
 inductive BlockchainActorMsg where
-  | newBlock (block : SignedBeaconBlock)
+  | newBlock (block : SignedBlock)
   | newAttestation (att : SignedAttestation)
   | slotTick (tick : SlotTick)
   | shutdown

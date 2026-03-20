@@ -44,20 +44,18 @@ structure BlockchainActorState where
 
 /-- Process a new signed block through fork choice and state transition. -/
 private def handleNewBlock (state : BlockchainActorState)
-    (signed : SignedBeaconBlock) : IO Unit := do
+    (signed : SignedBlock) : IO Unit := do
   let store ← state.store.get
-  match onBlock store signed.block with
+  match onBlock store signed.message with
   | .ok newStore =>
     state.store.set newStore
-    let root := blockRoot signed.block
-    -- Persist block to storage
+    let root := blockRoot signed.message
     if let some sb := state.storage then
-      sb.putBlock root signed.block
-    -- Update metrics
+      sb.putBlock root signed.message
     if let some m := state.metrics then
       m.blocksImported.increment
-      m.headSlot.set signed.block.slot.toNat
-    send state.validator (.blockImported root signed.block.slot)
+      m.headSlot.set signed.message.slot.toNat
+    send state.validator (.blockImported root signed.message.slot)
   | .error e =>
     IO.eprintln s!"[blockchain] block rejected: {e}"
 
@@ -81,15 +79,12 @@ private def handleNewAttestation (state : BlockchainActorState)
 -- Slot Tick Handling
 -- ════════════════════════════════════════════════════════════════
 
-/-- Handle a slot tick: advance the store's current slot and determine duties. -/
+/-- Handle a slot tick: advance the store's time and determine duties. -/
 private def handleSlotTick (state : BlockchainActorState)
     (tick : SlotTick) : IO Unit := do
   let store ← state.store.get
-  let newStore := { store with currentSlot := tick.slot }
+  let newStore := onTick store tick.slot
   state.store.set newStore
-  -- Notify validator of slot advancement for duty assignment
-  -- In a full implementation, this would check the validator's duties
-  -- (proposer/attester) for the new slot
   send state.validator (.proposeBlock tick.slot)
   send state.validator (.attestSlot tick.slot)
 
@@ -120,14 +115,14 @@ private def blockchainHandler (state : BlockchainActorState)
 
 /-- Spawn the blockchain actor with the given genesis state and block.
     Initializes the fork choice store from genesis. -/
-def spawnBlockchainActor (genesisState : BeaconState)
-    (genesisBlock : BeaconBlock)
+def spawnBlockchainActor (genesisState : State)
+    (genesisBlock : Block)
     (validator : ActorHandle ValidatorActorMsg)
     (p2p : ActorHandle P2PActorMsg)
     (storage : Option StorageBackend := none)
     (metrics : Option BeaconMetrics := none) :
     IO (ActorHandle BlockchainActorMsg) := do
-  let store ← IO.mkRef (initStore genesisState genesisBlock)
+  let store ← IO.mkRef (fromAnchor genesisState genesisBlock)
   let state : BlockchainActorState := { store, validator, p2p, storage, metrics }
   spawnActor fun msg => blockchainHandler state msg
 

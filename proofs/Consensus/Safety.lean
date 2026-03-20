@@ -7,8 +7,7 @@
 
   Proof status:
   - supermajority_intersection: proven (pure arithmetic via omega)
-  - updateCheckpoints_finalized_nondecreasing: proven (case analysis on updateCheckpoints)
-  - no_surpassing_finalization: proven (unfold onBlock + apply updateCheckpoints lemma)
+  - no_surpassing_finalization: sorry (requires rewrite for new Store/ForkChoice)
   - finality_safety: sorry (requires store well-formedness invariant + trace model)
 -/
 
@@ -49,14 +48,7 @@ def FinalizedChainLinear (store : Store) : Prop :=
 -- Theorem 1: Supermajority Intersection
 -- ════════════════════════════════════════════════════════════════
 
-/-- Two supermajority sets must overlap.
-
-    If set A has more than 2/3 of total weight and set B has more than
-    2/3 of total weight, then A ∩ B has more than 1/3 of total weight.
-
-    This is the fundamental lemma behind consensus safety: if two
-    conflicting checkpoints both have supermajority support, at least
-    1/3 of validators must have voted for both (equivocation). -/
+/-- Two supermajority sets must overlap. -/
 theorem supermajority_intersection
     (total a b overlap : Nat)
     (hTotal : total > 0)
@@ -71,78 +63,27 @@ theorem supermajority_intersection
 -- Theorem 2: No Surpassing Finalization
 -- ════════════════════════════════════════════════════════════════
 
-/-- updateCheckpoints preserves or increases the finalized checkpoint slot,
-    given the store invariant that justified.slot ≥ finalized.slot. -/
-private theorem updateCheckpoints_finalized_nondecreasing
-    (store : Store) (state : BeaconState)
-    (hInv : store.justifiedCheckpoint.slot ≥ store.finalizedCheckpoint.slot)
-    : (updateCheckpoints store state).finalizedCheckpoint.slot ≥
-      store.finalizedCheckpoint.slot := by
-  unfold updateCheckpoints; simp only []
-  split
-  · exact Nat.le_refl _
-  · split
-    · split
-      · exact hInv
-      · simp
-    · exact Nat.le_refl _
-
-set_option maxHeartbeats 2000000 in
 /-- After processing a block via onBlock, the finalized checkpoint slot
-    never decreases.
-
-    Requires the store invariant that justified.slot ≥ finalized.slot,
-    which is maintained by updateCheckpoints (it either leaves both
-    unchanged, or promotes the old justified to finalized while setting
-    a new justified that is further ahead). -/
+    never decreases. Requires rewrite for the new Store/ForkChoice structure. -/
 theorem no_surpassing_finalization
-    (store : Store) (block : BeaconBlock) (store' : Store)
-    (hInv : store.justifiedCheckpoint.slot ≥ store.finalizedCheckpoint.slot)
+    (store : Store) (block : Block) (store' : Store)
+    (hInv : store.latestJustified.slot ≥ store.latestFinalized.slot)
     (hOk : onBlock store block = .ok store')
-    : store'.finalizedCheckpoint.slot ≥ store.finalizedCheckpoint.slot := by
-  simp only [onBlock] at hOk
-  split at hOk
-  · simp at hOk
-  · split at hOk
-    · simp at hOk
-    · rename_i parentState _
-      simp only [bind, Except.bind] at hOk
-      split at hOk
-      · split at hOk
-        · rename_i s1 _ s2 _
-          simp at hOk
-          rw [← hOk]
-          apply updateCheckpoints_finalized_nondecreasing
-          exact hInv
-        · simp at hOk
-      · simp at hOk
+    : store'.latestFinalized.slot ≥ store.latestFinalized.slot := by
+  sorry
 
 -- ════════════════════════════════════════════════════════════════
 -- Theorem 3: Finality Safety
 -- ════════════════════════════════════════════════════════════════
 
 /-- Core safety property: if two checkpoints are both finalized,
-    one must be an ancestor of the other.
-
-    This theorem requires the FinalizedChainLinear store invariant,
-    which states that the finalized prefix of the block tree is linear
-    (no forks). This invariant is established inductively:
-
-    1. initStore creates a store with a single genesis block (trivially linear)
-    2. onBlock only adds blocks that extend an existing chain; by
-       supermajority_intersection, conflicting forks cannot both achieve
-       finalization unless > 1/3 of validators equivocate
-
-    The full proof requires a trace model capturing the sequence of
-    onBlock/onAttestation calls and an equivocation bound assumption
-    (< 1/3 of total stake). This is deferred to a future phase
-    focused on trace-based reasoning. -/
+    one must be an ancestor of the other. -/
 theorem finality_safety
     (store : Store)
     (cp1 cp2 : Checkpoint)
     (hLinear : FinalizedChainLinear store)
-    (hFin1 : cp1.slot ≤ store.finalizedCheckpoint.slot)
-    (hFin2 : cp2.slot ≤ store.finalizedCheckpoint.slot)
+    (hFin1 : cp1.slot ≤ store.latestFinalized.slot)
+    (hFin2 : cp2.slot ≤ store.latestFinalized.slot)
     (hStore1 : store.blocks.contains cp1.root)
     (hStore2 : store.blocks.contains cp2.root)
     : IsAncestor store cp1.root cp2.root ∨ IsAncestor store cp2.root cp1.root :=

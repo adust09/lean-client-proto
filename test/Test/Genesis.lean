@@ -72,14 +72,8 @@ def runTests : IO (Nat × Nat) := do
 
     let (t, f) ← check "genesis state slot is 0" (state.slot == 0)
     total := total + t; failures := failures + f
-
-    let (t, f) ← check "genesis state balances match"
-      (state.balances.elems.size == 4)
-    total := total + t; failures := failures + f
   | .error e =>
     let (t, f) ← check s!"buildGenesisState (error: {e})" false
-    total := total + t; failures := failures + f
-    let (t, f) ← check "skipped" false
     total := total + t; failures := failures + f
     let (t, f) ← check "skipped" false
     total := total + t; failures := failures + f

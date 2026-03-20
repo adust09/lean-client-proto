@@ -1,9 +1,8 @@
 /-
   SSZ roundtrip tests using leanSpec-generated fixtures.
 
-  For each SSZ fixture with a matching type (Checkpoint, BlockHeader),
-  decodes the hex SSZ bytes, re-encodes, and verifies roundtrip.
-  Types with structural divergence (Validator, Block) are skipped.
+  For each SSZ fixture with a matching type, decodes the hex SSZ bytes,
+  re-encodes, and verifies roundtrip.
 -/
 
 import LeanConsensus.SSZ
@@ -48,27 +47,17 @@ def check (name : String) (condition : Bool) : IO (Nat × Nat) := do
     IO.println s!"  ✗ {name}"
     return (1, 1)
 
-/-- Try roundtrip for Checkpoint type. -/
-def testCheckpointRoundtrip (fixture : SSZFixture) : IO (Nat × Nat) := do
+/-- Generic roundtrip test for any SSZ type. -/
+def testRoundtrip {α : Type} [SszDecode α] [SszEncode α] (typeName : String)
+    (fixture : SSZFixture) : IO (Nat × Nat) := do
   match hexToBytes fixture.serialized with
-  | none => check s!"Checkpoint hex decode" false
+  | none => check s!"{typeName} hex decode" false
   | some sszBytes =>
-    match @SszDecode.sszDecode Checkpoint _ sszBytes with
-    | .error _ => check s!"Checkpoint SSZ decode" false
+    match @SszDecode.sszDecode α _ sszBytes with
+    | .error _ => check s!"{typeName} SSZ decode" false
     | .ok val =>
-      let reEncoded := @SszEncode.sszEncode Checkpoint _ val
-      check s!"Checkpoint roundtrip" (reEncoded == sszBytes)
-
-/-- Try roundtrip for BlockHeader type. -/
-def testBlockHeaderRoundtrip (fixture : SSZFixture) : IO (Nat × Nat) := do
-  match hexToBytes fixture.serialized with
-  | none => check s!"BlockHeader hex decode" false
-  | some sszBytes =>
-    match @SszDecode.sszDecode BeaconBlockHeader _ sszBytes with
-    | .error _ => check s!"BlockHeader SSZ decode" false
-    | .ok val =>
-      let reEncoded := @SszEncode.sszEncode BeaconBlockHeader _ val
-      check s!"BlockHeader roundtrip" (reEncoded == sszBytes)
+      let reEncoded := @SszEncode.sszEncode α _ val
+      check s!"{typeName} roundtrip" (reEncoded == sszBytes)
 
 def runTests : IO (Nat × Nat) := do
   IO.println "\n── LeanSpec SSZ ──"
@@ -93,12 +82,54 @@ def runTests : IO (Nat × Nat) := do
     | .ok fixture =>
       match fixture.typeName with
       | "Checkpoint" =>
-        let (t, f) ← testCheckpointRoundtrip fixture
+        let (t, f) ← testRoundtrip (α := Checkpoint) "Checkpoint" fixture
         total := total + t; failures := failures + f
       | "BlockHeader" =>
-        let (t, f) ← testBlockHeaderRoundtrip fixture
+        let (t, f) ← testRoundtrip (α := BeaconBlockHeader) "BlockHeader" fixture
         total := total + t; failures := failures + f
-      | _ => pure () -- skip divergent types
+      | "Config" =>
+        let (t, f) ← testRoundtrip (α := Config) "Config" fixture
+        total := total + t; failures := failures + f
+      | "Validator" =>
+        let (t, f) ← testRoundtrip (α := Validator) "Validator" fixture
+        total := total + t; failures := failures + f
+      | "AttestationData" =>
+        let (t, f) ← testRoundtrip (α := AttestationData) "AttestationData" fixture
+        total := total + t; failures := failures + f
+      | "AggregatedSignatureProof" =>
+        let (t, f) ← testRoundtrip (α := AggregatedSignatureProof) "AggregatedSignatureProof" fixture
+        total := total + t; failures := failures + f
+      | "AggregatedAttestation" =>
+        let (t, f) ← testRoundtrip (α := AggregatedAttestation) "AggregatedAttestation" fixture
+        total := total + t; failures := failures + f
+      | "Attestation" =>
+        let (t, f) ← testRoundtrip (α := Attestation) "Attestation" fixture
+        total := total + t; failures := failures + f
+      | "SignedAttestation" =>
+        let (t, f) ← testRoundtrip (α := SignedAttestation) "SignedAttestation" fixture
+        total := total + t; failures := failures + f
+      | "Block" =>
+        let (t, f) ← testRoundtrip (α := Block) "Block" fixture
+        total := total + t; failures := failures + f
+      | "BlockBody" =>
+        let (t, f) ← testRoundtrip (α := BlockBody) "BlockBody" fixture
+        total := total + t; failures := failures + f
+      | "BlockSignatures" =>
+        let (t, f) ← testRoundtrip (α := BlockSignatures) "BlockSignatures" fixture
+        total := total + t; failures := failures + f
+      | "SignedBlock" =>
+        let (t, f) ← testRoundtrip (α := SignedBlock) "SignedBlock" fixture
+        total := total + t; failures := failures + f
+      | "State" =>
+        let (t, f) ← testRoundtrip (α := State) "State" fixture
+        total := total + t; failures := failures + f
+      | "PublicKey" =>
+        let (t, f) ← testRoundtrip (α := BytesN XMSS_PUBKEY_SIZE) "PublicKey" fixture
+        total := total + t; failures := failures + f
+      | "Signature" =>
+        let (t, f) ← testRoundtrip (α := BytesN XMSS_SIGNATURE_SIZE) "Signature" fixture
+        total := total + t; failures := failures + f
+      | _ => pure ()
 
   IO.println s!"  SSZ: {total - failures}/{total} passed"
   return (total, failures)

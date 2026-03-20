@@ -19,16 +19,12 @@ def check (name : String) (condition : Bool) : IO (Nat × Nat) := do
     IO.println s!"  ✗ {name}"
     return (1, 1)
 
-/-- Create a minimal genesis BeaconState with N validators. -/
-def mkGenesisState (numValidators : Nat) : BeaconState :=
-  let validators : Array Validator := Array.range numValidators |>.map fun _ =>
-    { pubkey := BytesN.zero XMSS_PUBKEY_SIZE
-      effectiveBalance := 32000000000
-      slashed := false
-      activationSlot := 0
-      exitSlot := 0xFFFFFFFFFFFFFFFF
-      withdrawableSlot := 0xFFFFFFFFFFFFFFFF }
-  let balances : Array Gwei := Array.range numValidators |>.map fun _ => (32000000000 : UInt64)
+/-- Create a minimal genesis State with N validators. -/
+def mkGenesisState (numValidators : Nat) : State :=
+  let validators : Array Validator := Array.range numValidators |>.map fun i =>
+    { attestationPubkey := BytesN.zero XMSS_PUBKEY_SIZE
+      proposalPubkey := BytesN.zero XMSS_PUBKEY_SIZE
+      index := i.toUInt64 }
   let zeroRoot := Bytes32.zero
   let genesisHeader : BeaconBlockHeader :=
     { slot := 0
@@ -36,34 +32,31 @@ def mkGenesisState (numValidators : Nat) : BeaconState :=
       parentRoot := zeroRoot
       stateRoot := zeroRoot
       bodyRoot := zeroRoot }
-  let blockRoots := SszVector.mkChecked (n := SLOTS_PER_HISTORICAL_ROOT)
-    (Array.replicate SLOTS_PER_HISTORICAL_ROOT zeroRoot)
-  let stateRoots := SszVector.mkChecked (n := SLOTS_PER_HISTORICAL_ROOT)
-    (Array.replicate SLOTS_PER_HISTORICAL_ROOT zeroRoot)
-  let validatorsList := SszList.mkChecked (maxCap := VALIDATOR_REGISTRY_LIMIT) validators
-  let balancesList := SszList.mkChecked (maxCap := VALIDATOR_REGISTRY_LIMIT) balances
-  match blockRoots, stateRoots, validatorsList, balancesList with
-  | .ok br, .ok sr, .ok vs, .ok bs =>
-    { slot := 0
+  let cfg : Config := { genesisTime := 0 }
+  let zeroCheckpoint : Checkpoint := { root := zeroRoot, slot := 0 }
+  match SszList.mkChecked (maxCap := VALIDATOR_REGISTRY_LIMIT) validators with
+  | .ok vs =>
+    { config := cfg
+      slot := 0
       latestBlockHeader := genesisHeader
-      blockRoots := br
-      stateRoots := sr
+      latestJustified := zeroCheckpoint
+      latestFinalized := zeroCheckpoint
+      historicalBlockHashes := SszList.empty
+      justifiedSlots := Bitlist.empty HISTORICAL_ROOTS_LIMIT
       validators := vs
-      balances := bs
-      justifiedCheckpoint := { slot := 0, root := zeroRoot }
-      finalizedCheckpoint := { slot := 0, root := zeroRoot }
-      currentAttestations := SszList.empty }
-  | _, _, _, _ =>
-    -- Unreachable with correct constants
-    { slot := 0
+      justificationsRoots := SszList.empty
+      justificationsValidators := Bitlist.empty (HISTORICAL_ROOTS_LIMIT * VALIDATOR_REGISTRY_LIMIT) }
+  | .error _ =>
+    { config := cfg
+      slot := 0
       latestBlockHeader := genesisHeader
-      blockRoots := ⟨Array.replicate SLOTS_PER_HISTORICAL_ROOT zeroRoot, by simp [Array.size_replicate]⟩
-      stateRoots := ⟨Array.replicate SLOTS_PER_HISTORICAL_ROOT zeroRoot, by simp [Array.size_replicate]⟩
+      latestJustified := zeroCheckpoint
+      latestFinalized := zeroCheckpoint
+      historicalBlockHashes := SszList.empty
+      justifiedSlots := Bitlist.empty HISTORICAL_ROOTS_LIMIT
       validators := SszList.empty
-      balances := SszList.empty
-      justifiedCheckpoint := { slot := 0, root := zeroRoot }
-      finalizedCheckpoint := { slot := 0, root := zeroRoot }
-      currentAttestations := SszList.empty }
+      justificationsRoots := SszList.empty
+      justificationsValidators := Bitlist.empty (HISTORICAL_ROOTS_LIMIT * VALIDATOR_REGISTRY_LIMIT) }
 
 def runTests : IO (Nat × Nat) := do
   IO.println "\n── State Transition ──"
@@ -100,11 +93,9 @@ def runTests : IO (Nat × Nat) := do
 
   -- Test 4: processBlock with valid block on genesis state
   do
-    -- Advance to slot 1 first
     let s1 := processSlot genesis
-    -- Create a valid block for slot 1
     let parentRoot := toBytes32 (SszHashTreeRoot.hashTreeRoot s1.latestBlockHeader)
-    let block : BeaconBlock :=
+    let block : Block :=
       { slot := 1
         proposerIndex := 0
         parentRoot := parentRoot
@@ -122,7 +113,7 @@ def runTests : IO (Nat × Nat) := do
   do
     let s1 := processSlot genesis
     let parentRoot := toBytes32 (SszHashTreeRoot.hashTreeRoot s1.latestBlockHeader)
-    let block : BeaconBlock :=
+    let block : Block :=
       { slot := 99
         proposerIndex := 0
         parentRoot := parentRoot
@@ -142,10 +133,10 @@ def runTests : IO (Nat × Nat) := do
   -- Test 6: processBlock rejects invalid parent root
   do
     let s1 := processSlot genesis
-    let block : BeaconBlock :=
+    let block : Block :=
       { slot := 1
         proposerIndex := 0
-        parentRoot := Bytes32.zero  -- wrong parent
+        parentRoot := Bytes32.zero
         stateRoot := Bytes32.zero
         body := { attestations := SszList.empty } }
     match processBlock s1 block with
@@ -159,51 +150,17 @@ def runTests : IO (Nat × Nat) := do
       let (t, f) ← check "processBlock rejects invalid parent root (wrong error)" false
       total := total + t; failures := failures + f
 
-  -- Test 7: processBlock rejects slashed proposer
-  do
-    -- Create state with slashed validator at index 0
-    let slashedVal : Validator :=
-      { pubkey := BytesN.zero XMSS_PUBKEY_SIZE
-        effectiveBalance := 32000000000
-        slashed := true
-        activationSlot := 0
-        exitSlot := 0xFFFFFFFFFFFFFFFF
-        withdrawableSlot := 0xFFFFFFFFFFFFFFFF }
-    let vals := #[slashedVal]
-    match SszList.mkChecked (maxCap := VALIDATOR_REGISTRY_LIMIT) vals with
-    | .ok vsList =>
-      let slashedState := { genesis with validators := vsList }
-      let s1 := processSlot slashedState
-      let parentRoot := toBytes32 (SszHashTreeRoot.hashTreeRoot s1.latestBlockHeader)
-      let block : BeaconBlock :=
-        { slot := 1
-          proposerIndex := 0
-          parentRoot := parentRoot
-          stateRoot := Bytes32.zero
-          body := { attestations := SszList.empty } }
-      match processBlock s1 block with
-      | .error (.proposerSlashed _) =>
-        let (t, f) ← check "processBlock rejects slashed proposer" true
-        total := total + t; failures := failures + f
-      | _ =>
-        let (t, f) ← check "processBlock rejects slashed proposer" false
-        total := total + t; failures := failures + f
-    | .error _ =>
-      let (t, f) ← check "processBlock rejects slashed proposer (setup failed)" false
-      total := total + t; failures := failures + f
-
-  -- Test 8: processAttestation rejects future attestation
+  -- Test 7: processAttestation rejects future attestation
   do
     let s1 := processSlot genesis
     let futureData : AttestationData :=
-      { slot := 99, headRoot := Bytes32.zero
-        sourceCheckpoint := genesis.justifiedCheckpoint
-        targetCheckpoint := genesis.justifiedCheckpoint }
-    let futureAtt : SignedAggregatedAttestation :=
-      { data := futureData
-        aggregationBits := Bitlist.empty MAX_VALIDATORS_PER_SUBNET
-        aggregationProof := ⟨ByteArray.empty⟩ }
-    match processAttestation s1 futureAtt with
+      { slot := 99, head := genesis.latestJustified
+        source := genesis.latestJustified
+        target := genesis.latestJustified }
+    let futureAtt : AggregatedAttestation :=
+      { aggregationBits := Bitlist.empty VALIDATOR_REGISTRY_LIMIT
+        data := futureData }
+    match processAttestations s1 #[futureAtt] with
     | .error (.attestationSlotTooNew _ _) =>
       let (t, f) ← check "processAttestation rejects future attestation" true
       total := total + t; failures := failures + f
@@ -211,19 +168,18 @@ def runTests : IO (Nat × Nat) := do
       let (t, f) ← check "processAttestation rejects future attestation" false
       total := total + t; failures := failures + f
 
-  -- Test 9: processAttestation rejects too-old attestation
+  -- Test 8: processAttestation rejects too-old attestation
   do
     match processSlots genesis 10 with
     | .ok s10 =>
       let oldData : AttestationData :=
-        { slot := 1, headRoot := Bytes32.zero
-          sourceCheckpoint := s10.justifiedCheckpoint
-          targetCheckpoint := s10.justifiedCheckpoint }
-      let oldAtt : SignedAggregatedAttestation :=
-        { data := oldData
-          aggregationBits := Bitlist.empty MAX_VALIDATORS_PER_SUBNET
-          aggregationProof := ⟨ByteArray.empty⟩ }
-      match processAttestation s10 oldAtt with
+        { slot := 1, head := s10.latestJustified
+          source := s10.latestJustified
+          target := s10.latestJustified }
+      let oldAtt : AggregatedAttestation :=
+        { aggregationBits := Bitlist.empty VALIDATOR_REGISTRY_LIMIT
+          data := oldData }
+      match processAttestations s10 #[oldAtt] with
       | .error (.attestationSlotTooOld _ _) =>
         let (t, f) ← check "processAttestation rejects too-old attestation" true
         total := total + t; failures := failures + f

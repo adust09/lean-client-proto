@@ -45,15 +45,15 @@ def runTests : IO (Nat × Nat) := do
   let (t, f) ← check "Bytes32 zero roundtrip" (roundtrip Bytes32.zero)
   total := total + t; failures := failures + f
 
-  let cp : Checkpoint := { slot := 100, root := Bytes32.zero }
+  let cp : Checkpoint := { root := Bytes32.zero, slot := 100 }
   let (t, f) ← check "Checkpoint roundtrip" (roundtrip cp)
   total := total + t; failures := failures + f
 
   let ad : AttestationData := {
     slot := 42
-    headRoot := Bytes32.zero
-    sourceCheckpoint := { slot := 10, root := Bytes32.zero }
-    targetCheckpoint := { slot := 20, root := Bytes32.zero }
+    head := { root := Bytes32.zero, slot := 10 }
+    source := { root := Bytes32.zero, slot := 10 }
+    target := { root := Bytes32.zero, slot := 20 }
   }
   let (t, f) ← check "AttestationData roundtrip" (roundtrip ad)
   total := total + t; failures := failures + f
@@ -66,12 +66,9 @@ def runTests : IO (Nat × Nat) := do
   total := total + t; failures := failures + f
 
   let val : Validator := {
-    pubkey := BytesN.zero XMSS_PUBKEY_SIZE
-    effectiveBalance := 32000000000
-    slashed := false
-    activationSlot := 0
-    exitSlot := 0xFFFFFFFFFFFFFFFF
-    withdrawableSlot := 0xFFFFFFFFFFFFFFFF
+    attestationPubkey := BytesN.zero XMSS_PUBKEY_SIZE
+    proposalPubkey := BytesN.zero XMSS_PUBKEY_SIZE
+    index := 0
   }
   let (t, f) ← check "Validator roundtrip" (roundtrip val)
   total := total + t; failures := failures + f

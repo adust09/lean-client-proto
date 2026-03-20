@@ -113,14 +113,14 @@ private def blockPath (config : StorageConfig) (root : Root) : System.FilePath :
 
 /-- Store a block: encode to SSZ, write to cache and file. -/
 def StorageBackend.putBlock (sb : StorageBackend) (root : Root)
-    (block : BeaconBlock) : IO Unit := do
+    (block : Block) : IO Unit := do
   let encoded := SszEncode.sszEncode block
   sb.blockCache.modify (·.insert root encoded)
   IO.FS.writeBinFile (blockPath sb.config root) encoded
 
 /-- Retrieve a block by root. Checks cache first, then disk. -/
 def StorageBackend.getBlock (sb : StorageBackend) (root : Root) :
-    IO (Option BeaconBlock) := do
+    IO (Option Block) := do
   let cache ← sb.blockCache.get
   let bytes ← match cache.get? root with
     | some data => pure (some data)
@@ -156,14 +156,14 @@ private def statePath (config : StorageConfig) (root : Root) : System.FilePath :
 
 /-- Store a beacon state: encode to SSZ, write to cache and file. -/
 def StorageBackend.putState (sb : StorageBackend) (root : Root)
-    (state : BeaconState) : IO Unit := do
+    (state : State) : IO Unit := do
   let encoded := SszEncode.sszEncode state
   sb.stateCache.modify (·.insert root encoded)
   IO.FS.writeBinFile (statePath sb.config root) encoded
 
 /-- Retrieve a beacon state by root. Checks cache first, then disk. -/
 def StorageBackend.getState (sb : StorageBackend) (root : Root) :
-    IO (Option BeaconState) := do
+    IO (Option State) := do
   let cache ← sb.stateCache.get
   let bytes ← match cache.get? root with
     | some data => pure (some data)
@@ -204,11 +204,11 @@ def StorageBackend.saveStoreSnapshot (sb : StorageBackend)
     (store : Store) : IO Unit := do
   -- Serialize checkpoint and slot metadata as a simple binary format:
   -- justified checkpoint (SSZ) ++ finalized checkpoint (SSZ) ++ currentSlot (8 bytes LE)
-  let justified := SszEncode.sszEncode store.justifiedCheckpoint
-  let finalized := SszEncode.sszEncode store.finalizedCheckpoint
+  let justified := SszEncode.sszEncode store.latestJustified
+  let finalized := SszEncode.sszEncode store.latestFinalized
   let slotBytes := Id.run do
     let mut buf := ByteArray.mk #[]
-    let slot := store.currentSlot
+    let slot := store.time
     for i in [:8] do
       buf := buf.push ((slot >>> (i * 8).toUInt64).toUInt8)
     return buf

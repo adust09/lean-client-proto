@@ -14,20 +14,14 @@ namespace LeanConsensus.Consensus
 -- Collection Limits (used as type-level parameters)
 -- ════════════════════════════════════════════════════════════════
 
-/-- Maximum number of validators per attestation subnet. -/
-def MAX_VALIDATORS_PER_SUBNET : Nat := 256
-
 /-- Maximum attestations per block body. -/
-def MAX_ATTESTATIONS : Nat := 128
-
-/-- Maximum attestations stored in beacon state. -/
-def MAX_ATTESTATIONS_STATE : Nat := 4096
-
-/-- Number of historical block/state roots kept in circular buffer. -/
-def SLOTS_PER_HISTORICAL_ROOT : Nat := 64
+def MAX_ATTESTATIONS : Nat := 4096
 
 /-- Maximum number of validators in the registry. -/
-def VALIDATOR_REGISTRY_LIMIT : Nat := 1024
+def VALIDATOR_REGISTRY_LIMIT : Nat := 4096
+
+/-- Maximum number of historical roots stored. -/
+def HISTORICAL_ROOTS_LIMIT : Nat := 262144
 
 -- ════════════════════════════════════════════════════════════════
 -- Timing
@@ -38,6 +32,12 @@ def SECONDS_PER_SLOT : Nat := 4
 
 /-- Number of slots to achieve finality (3-Slot Finality). -/
 def SLOTS_TO_FINALITY : Nat := 3
+
+/-- Number of intervals per slot. -/
+def INTERVALS_PER_SLOT : Nat := 5
+
+/-- Number of slots to look back for justification. -/
+def JUSTIFICATION_LOOKBACK_SLOTS : Nat := 3
 
 -- ════════════════════════════════════════════════════════════════
 -- Finality
@@ -57,10 +57,10 @@ def FAR_FUTURE_SLOT : Nat := 0xFFFFFFFFFFFFFFFF
 -- ════════════════════════════════════════════════════════════════
 
 /-- XMSS public key size in bytes. -/
-def XMSS_PUBKEY_SIZE : Nat := 32
+def XMSS_PUBKEY_SIZE : Nat := 52
 
-/-- XMSS signature size in bytes. -/
-def XMSS_SIGNATURE_SIZE : Nat := 3112
+/-- XMSS signature size in bytes (test config for fixtures). -/
+def XMSS_SIGNATURE_SIZE : Nat := 424
 
 -- ════════════════════════════════════════════════════════════════
 -- Network

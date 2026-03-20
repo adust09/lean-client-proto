@@ -68,7 +68,7 @@ def subscribe (node : P2PNode) (topics : Array String) : IO SseStream := do
 -- ════════════════════════════════════════════════════════════════
 
 /-- Publish a signed beacon block to the network via the sidecar. -/
-def publish (node : P2PNode) (block : SignedBeaconBlock) :
+def publish (node : P2PNode) (block : SignedBlock) :
     IO (Except String Unit) :=
   submitBlock node.client block
 
@@ -83,12 +83,12 @@ def publishAttestation (node : P2PNode) (att : SignedAggregatedAttestation) :
 
 /-- Request a range of blocks from the beacon node for sync. -/
 def requestBlocksByRange (node : P2PNode) (startSlot : UInt64) (count : Nat) :
-    IO (Except String (Array SignedBeaconBlock)) :=
+    IO (Except String (Array SignedBlock)) :=
   getBlocksByRange node.client startSlot count
 
 /-- Request a single block by its identifier. -/
 def requestBlock (node : P2PNode) (blockId : String) :
-    IO (Except String SignedBeaconBlock) :=
+    IO (Except String SignedBlock) :=
   getBlock node.client blockId
 
 -- ════════════════════════════════════════════════════════════════

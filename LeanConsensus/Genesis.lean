@@ -2,7 +2,7 @@
   Genesis — Load and build genesis state from JSON configuration
 
   Parses a genesis JSON file containing validator deposits and chain
-  parameters. Builds the initial BeaconState and BeaconBlock from
+  parameters. Builds the initial State and Block from
   the genesis configuration.
 -/
 
@@ -99,60 +99,41 @@ def loadGenesisFile (path : System.FilePath) : IO GenesisFile := do
 -- Genesis State Construction
 -- ════════════════════════════════════════════════════════════════
 
-/-- Create a dummy XMSS pubkey from a hex string (for genesis initialization).
-    In production, these would be real XMSS public keys from deposit data. -/
-private def dummyPubkey : XmssPubkey := BytesN.zero XMSS_PUBKEY_SIZE
-
 /-- Build a Validator from deposit data. -/
-private def buildValidator (deposit : ValidatorDeposit) : Validator :=
-  { pubkey := dummyPubkey
-    effectiveBalance := deposit.balance.toUInt64
-    slashed := false
-    activationSlot := 0
-    exitSlot := UInt64.ofNat FAR_FUTURE_SLOT
-    withdrawableSlot := UInt64.ofNat FAR_FUTURE_SLOT }
+private def buildValidator (_deposit : ValidatorDeposit) (idx : Nat) : Validator :=
+  { attestationPubkey := BytesN.zero XMSS_PUBKEY_SIZE
+    proposalPubkey := BytesN.zero XMSS_PUBKEY_SIZE
+    index := idx.toUInt64 }
 
-/-- Build the genesis BeaconState from a GenesisFile.
+/-- Build the genesis State from a GenesisFile.
     Returns an error if validation fails (e.g., too many validators). -/
-def buildGenesisState (genesis : GenesisFile) : Except String BeaconState := do
-  let validators := genesis.validators.map buildValidator
-  let balances := genesis.validators.map fun d => d.balance.toUInt64
-  -- Validate registry limit
+def buildGenesisState (genesis : GenesisFile) : Except String State := do
+  let validators := genesis.validators.mapIdx fun i d => buildValidator d i
   if validators.size > VALIDATOR_REGISTRY_LIMIT then
     .error s!"too many validators: {validators.size} > {VALIDATOR_REGISTRY_LIMIT}"
-  -- Build genesis block header
   let genesisHeader : BeaconBlockHeader := {
     slot := 0, proposerIndex := 0,
     parentRoot := BytesN.zero 32, stateRoot := BytesN.zero 32,
     bodyRoot := BytesN.zero 32
   }
-  -- Build empty historical roots
-  let zeroRoots : Array Root := Array.replicate SLOTS_PER_HISTORICAL_ROOT (BytesN.zero 32)
-  -- Construct the state with proof obligations
+  let cfg : Config := { genesisTime := genesis.config.genesisTime.toUInt64 }
   if hv : validators.size ≤ VALIDATOR_REGISTRY_LIMIT then
-    if hb : balances.size ≤ VALIDATOR_REGISTRY_LIMIT then
-      if hr : zeroRoots.size = SLOTS_PER_HISTORICAL_ROOT then
-        let emptyAtts : SszList MAX_ATTESTATIONS_STATE SignedAggregatedAttestation :=
-          ⟨#[], Nat.zero_le _⟩
-        .ok { slot := 0
-              latestBlockHeader := genesisHeader
-              blockRoots := ⟨zeroRoots, hr⟩
-              stateRoots := ⟨zeroRoots, hr⟩
-              validators := ⟨validators, hv⟩
-              balances := ⟨balances, hb⟩
-              justifiedCheckpoint := { slot := 0, root := BytesN.zero 32 }
-              finalizedCheckpoint := { slot := 0, root := BytesN.zero 32 }
-              currentAttestations := emptyAtts }
-      else
-        .error "internal error: failed to construct historical roots"
-    else
-      .error s!"balances array exceeds registry limit"
+    .ok { config := cfg
+          slot := 0
+          latestBlockHeader := genesisHeader
+          latestJustified := { root := BytesN.zero 32, slot := 0 }
+          latestFinalized := { root := BytesN.zero 32, slot := 0 }
+          historicalBlockHashes := SszList.empty
+          justifiedSlots := Bitlist.empty HISTORICAL_ROOTS_LIMIT
+          validators := ⟨validators, hv⟩
+          justificationsRoots := SszList.empty
+          justificationsValidators := Bitlist.empty (HISTORICAL_ROOTS_LIMIT * VALIDATOR_REGISTRY_LIMIT) }
   else
     .error s!"validators array exceeds registry limit"
 
 /-- Build the genesis block (slot 0, empty body). -/
-def buildGenesisBlock : BeaconBlock :=
-  let emptyAtts : SszList MAX_ATTESTATIONS SignedAggregatedAttestation :=
+def buildGenesisBlock : Block :=
+  let emptyAtts : SszList MAX_ATTESTATIONS AggregatedAttestation :=
     ⟨#[], Nat.zero_le _⟩
   { slot := 0
     proposerIndex := 0

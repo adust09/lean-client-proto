@@ -91,10 +91,6 @@ theorem ssz_roundtrip_uint64 (v : UInt64) :
 -- BytesN roundtrip
 -- ════════════════════════════════════════════════════════════════
 
-/- Proof: sszEncode b = b.data, sszDecode data = BytesN.mkChecked data
-   which checks data.size = n. Since b.hsize : b.data.size = n,
-   the check passes and we get ⟨b.data, proof⟩.
-   Equality with b follows from proof irrelevance on hsize. -/
 theorem ssz_roundtrip_bytesN {n : Nat} (b : BytesN n) :
     SszDecode.sszDecode (SszEncode.sszEncode b) = .ok b := by
   simp [SszEncode.sszEncode, SszDecode.sszDecode, BytesN.mkChecked, b.hsize]
@@ -102,24 +98,6 @@ theorem ssz_roundtrip_bytesN {n : Nat} (b : BytesN n) :
 -- ════════════════════════════════════════════════════════════════
 -- Container roundtrip proofs
 -- ════════════════════════════════════════════════════════════════
-
-/- Container roundtrip proofs require unfolding derive-generated SszEncode/SszDecode
-   instances. The derive handlers generate code using SszEncoder (two-pass) and
-   SszDecoder (Except.bind chains), producing terms with nested Array.foldl over
-   FieldEntry arrays that are too large for Lean's simplifier to reduce efficiently.
-
-   Each proof would structurally proceed as:
-   1. Show SszEncoder.finalize on the field entries produces the correct concatenation
-   2. Show SszDecoder.readFixed slices at the correct offsets
-   3. Apply field-level roundtrip proofs (ssz_roundtrip_uint64, ssz_roundtrip_bytesN)
-   4. Compose via struct extensionality
-
-   Proving these requires either:
-   - Custom simp lemmas for SszEncoder/SszDecoder that short-circuit the foldl expansion
-   - A reflection-based tactic that reasons about the two-pass structure directly
-   - Derive-generated proof terms alongside the encode/decode instances
-
-   These are deferred to a future phase focused on proof infrastructure. -/
 
 theorem ssz_roundtrip_checkpoint (c : Checkpoint) :
     SszDecode.sszDecode (SszEncode.sszEncode c) = .ok c := by sorry
