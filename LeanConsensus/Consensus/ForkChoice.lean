@@ -135,13 +135,13 @@ def getChildren (store : Store) (root : Root) : Array Root :=
 -- ════════════════════════════════════════════════════════════════
 
 /-- Population count (number of set bits) for a single byte. -/
-private def UInt8.popcount (b : UInt8) : Nat :=
+private def UInt8.popcount (b : UInt8) : Nat := Id.run do
   let mut count := 0
   let mut v := b
   for _ in [:8] do
     if v &&& 1 != 0 then count := count + 1
     v := v >>> 1
-  count
+  return count
 
 /-- Count the number of set bits in AggregationBits for weight. -/
 private def countAggregationBits (bits : AggregationBits) : Nat :=
@@ -185,8 +185,7 @@ where
 
 /-- Promote all new aggregated payloads to known. Called at interval boundaries. -/
 def promotePayloads (store : Store) : Store :=
-  let merged := store.latestNewAggregatedPayloads.fold
-    store.latestKnownAggregatedPayloads
+  let merged := store.latestNewAggregatedPayloads.fold (init := store.latestKnownAggregatedPayloads)
     fun acc root att => acc.insert root att
   { store with
     latestKnownAggregatedPayloads := merged
