@@ -95,6 +95,26 @@ def runTests : IO (Nat × Nat) := do
   let (t, f) ← check "AggregatedSignatureProof with data roundtrip" (roundtrip aspWithData)
   total := total + t; failures := failures + f
 
+  let aggBits := Bitlist.zeros 4 (by native_decide : 4 ≤ VALIDATOR_REGISTRY_LIMIT)
+  let aggAtt : AggregatedAttestation := {
+    aggregationBits := aggBits
+    data := ad
+  }
+  let (t, f) ← check "AggregatedAttestation roundtrip" (roundtrip aggAtt)
+  total := total + t; failures := failures + f
+
+  let proofData : ByteListMiB := ⟨ByteArray.mk #[], by native_decide⟩
+  let proof : AggregatedSignatureProof := {
+    participants := aggBits
+    proofData := proofData
+  }
+  let signedAggAtt : SignedAggregatedAttestation := {
+    data := ad
+    proof := proof
+  }
+  let (t, f) ← check "SignedAggregatedAttestation roundtrip" (roundtrip signedAggAtt)
+  total := total + t; failures := failures + f
+
   return (total, failures)
 
 end Test.SSZ.Roundtrip
