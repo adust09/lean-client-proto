@@ -29,7 +29,6 @@ def runTests : IO (Nat × Nat) := do
     genesisTime := 1700000000
     forkVersion := "0x00000001"
     validatorCount := 4
-    balancePerValidator := 32000000000
   }
   let json := ToJson.toJson config
   match @FromJson.fromJson? GenesisConfig _ json with
@@ -42,12 +41,15 @@ def runTests : IO (Nat × Nat) := do
     total := total + t; failures := failures + f
 
   -- ValidatorDeposit JSON roundtrip
-  let deposit : ValidatorDeposit := { pubkey := "0xaabb", balance := 32000000000 }
+  let deposit : ValidatorDeposit := {
+    attestationPubkey := "0xaabb"
+    proposalPubkey := "0xccdd"
+  }
   let json := ToJson.toJson deposit
   match @FromJson.fromJson? ValidatorDeposit _ json with
   | .ok d' =>
     let (t, f) ← check "ValidatorDeposit JSON roundtrip"
-      (d'.pubkey == "0xaabb" && d'.balance == 32000000000)
+      (d'.attestationPubkey == "0xaabb" && d'.proposalPubkey == "0xccdd")
     total := total + t; failures := failures + f
   | .error e =>
     let (t, f) ← check s!"ValidatorDeposit JSON roundtrip (error: {e})" false
@@ -55,13 +57,12 @@ def runTests : IO (Nat × Nat) := do
 
   -- Build genesis state with small validator set
   let genesis : GenesisFile := {
-    config := { genesisTime := 0, forkVersion := "0x00", validatorCount := 4,
-                balancePerValidator := 32000000000 }
+    config := { genesisTime := 0, forkVersion := "0x00", validatorCount := 4 }
     validators := #[
-      { pubkey := "0x01", balance := 32000000000 },
-      { pubkey := "0x02", balance := 32000000000 },
-      { pubkey := "0x03", balance := 32000000000 },
-      { pubkey := "0x04", balance := 32000000000 }
+      { attestationPubkey := "0x01", proposalPubkey := "0x02" },
+      { attestationPubkey := "0x03", proposalPubkey := "0x04" },
+      { attestationPubkey := "0x05", proposalPubkey := "0x06" },
+      { attestationPubkey := "0x07", proposalPubkey := "0x08" }
     ]
   }
   match buildGenesisState genesis with

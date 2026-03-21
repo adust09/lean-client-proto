@@ -50,9 +50,6 @@ def FINALITY_THRESHOLD_NUMERATOR : Nat := 2
 /-- Denominator of the finality threshold. -/
 def FINALITY_THRESHOLD_DENOMINATOR : Nat := 3
 
-/-- Sentinel slot value representing "no exit scheduled". -/
-def FAR_FUTURE_SLOT : Nat := 0xFFFFFFFFFFFFFFFF
-
 -- ════════════════════════════════════════════════════════════════
 -- Cryptographic Sizes
 -- ════════════════════════════════════════════════════════════════
