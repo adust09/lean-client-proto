@@ -1,6 +1,6 @@
 ---
 title: Integration Guide
-last_updated: 2026-03-18
+last_updated: 2026-03-21
 tags:
   - integration
   - devnet
@@ -36,14 +36,13 @@ Create a `genesis.json` matching the devnet genesis state:
   "config": {
     "genesis_time": 1700000000,
     "fork_version": "0x10000091",
-    "validator_count": 4,
-    "balance_per_validator": 32000000000
+    "validator_count": 4
   },
   "validators": [
-    { "pubkey": "0x...", "balance": 32000000000 },
-    { "pubkey": "0x...", "balance": 32000000000 },
-    { "pubkey": "0x...", "balance": 32000000000 },
-    { "pubkey": "0x...", "balance": 32000000000 }
+    { "attestation_pubkey": "0x...", "proposal_pubkey": "0x..." },
+    { "attestation_pubkey": "0x...", "proposal_pubkey": "0x..." },
+    { "attestation_pubkey": "0x...", "proposal_pubkey": "0x..." },
+    { "attestation_pubkey": "0x...", "proposal_pubkey": "0x..." }
   ]
 }
 ```

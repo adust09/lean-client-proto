@@ -23,10 +23,9 @@ open Lean (Json FromJson ToJson)
 
 /-- Chain-level genesis parameters. -/
 structure GenesisConfig where
-  genesisTime         : Nat
-  forkVersion         : String
-  validatorCount      : Nat
-  balancePerValidator : Nat
+  genesisTime    : Nat
+  forkVersion    : String
+  validatorCount : Nat
   deriving Inhabited
 
 instance : FromJson GenesisConfig where
@@ -34,33 +33,31 @@ instance : FromJson GenesisConfig where
     let genesisTime ← json.getObjValAs? Nat "genesis_time"
     let forkVersion ← json.getObjValAs? String "fork_version"
     let validatorCount ← json.getObjValAs? Nat "validator_count"
-    let balancePerValidator ← json.getObjValAs? Nat "balance_per_validator"
-    return { genesisTime, forkVersion, validatorCount, balancePerValidator }
+    return { genesisTime, forkVersion, validatorCount }
 
 instance : ToJson GenesisConfig where
   toJson c := Json.mkObj [
     ("genesis_time", ToJson.toJson c.genesisTime),
     ("fork_version", ToJson.toJson c.forkVersion),
-    ("validator_count", ToJson.toJson c.validatorCount),
-    ("balance_per_validator", ToJson.toJson c.balancePerValidator)
+    ("validator_count", ToJson.toJson c.validatorCount)
   ]
 
-/-- A single validator deposit entry. -/
+/-- A single validator deposit entry with dual XMSS keys. -/
 structure ValidatorDeposit where
-  pubkey  : String
-  balance : Nat
+  attestationPubkey : String
+  proposalPubkey    : String
   deriving Inhabited
 
 instance : FromJson ValidatorDeposit where
   fromJson? json := do
-    let pubkey ← json.getObjValAs? String "pubkey"
-    let balance ← json.getObjValAs? Nat "balance"
-    return { pubkey, balance }
+    let attestationPubkey ← json.getObjValAs? String "attestation_pubkey"
+    let proposalPubkey ← json.getObjValAs? String "proposal_pubkey"
+    return { attestationPubkey, proposalPubkey }
 
 instance : ToJson ValidatorDeposit where
   toJson d := Json.mkObj [
-    ("pubkey", ToJson.toJson d.pubkey),
-    ("balance", ToJson.toJson d.balance)
+    ("attestation_pubkey", ToJson.toJson d.attestationPubkey),
+    ("proposal_pubkey", ToJson.toJson d.proposalPubkey)
   ]
 
 /-- Complete genesis file with config and validator list. -/
@@ -99,10 +96,31 @@ def loadGenesisFile (path : System.FilePath) : IO GenesisFile := do
 -- Genesis State Construction
 -- ════════════════════════════════════════════════════════════════
 
+/-- Parse a hex string (with optional 0x prefix) into a BytesN, zero-filling on failure. -/
+private def hexToBytesN (n : Nat) (hex : String) : BytesN n :=
+  let s := if hex.startsWith "0x" then String.ofList (hex.toList.drop 2) else hex
+  let chars := s.toList
+  let raw := Id.run do
+    let mut result := ByteArray.empty
+    let mut i := 0
+    while h : i + 1 < chars.length do
+      let hi := hexDigitVal (chars[i]'(by omega))
+      let lo := hexDigitVal (chars[i + 1]'(by omega))
+      result := result.push (hi * 16 + lo)
+      i := i + 2
+    return result
+  if h : raw.size = n then ⟨raw, h⟩ else BytesN.zero n
+where
+  hexDigitVal (c : Char) : UInt8 :=
+    if '0' ≤ c && c ≤ '9' then (c.toNat - '0'.toNat).toUInt8
+    else if 'a' ≤ c && c ≤ 'f' then (c.toNat - 'a'.toNat + 10).toUInt8
+    else if 'A' ≤ c && c ≤ 'F' then (c.toNat - 'A'.toNat + 10).toUInt8
+    else 0
+
 /-- Build a Validator from deposit data. -/
-private def buildValidator (_deposit : ValidatorDeposit) (idx : Nat) : Validator :=
-  { attestationPubkey := BytesN.zero XMSS_PUBKEY_SIZE
-    proposalPubkey := BytesN.zero XMSS_PUBKEY_SIZE
+private def buildValidator (deposit : ValidatorDeposit) (idx : Nat) : Validator :=
+  { attestationPubkey := hexToBytesN XMSS_PUBKEY_SIZE deposit.attestationPubkey
+    proposalPubkey := hexToBytesN XMSS_PUBKEY_SIZE deposit.proposalPubkey
     index := idx.toUInt64 }
 
 /-- Build the genesis State from a GenesisFile.
