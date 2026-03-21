@@ -215,12 +215,14 @@ instance : FromJson SSZFixture where
 structure STFixture where
   pre    : FixtureState
   blocks : Array FixtureBlock
+  post   : Option FixtureState
 
 instance : FromJson STFixture where
   fromJson? json := do
     let pre ← json.getObjValAs? FixtureState "pre"
     let blocks ← json.getObjValAs? (Array FixtureBlock) "blocks"
-    return { pre, blocks }
+    let post := json.getObjValAs? FixtureState "post" |>.toOption
+    return { pre, blocks, post }
 
 -- ════════════════════════════════════════════════════════════════
 -- Fork choice fixture type
