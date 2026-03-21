@@ -61,10 +61,11 @@ instance : FromJson FixtureValidator where
     return { attestationPubkey, proposalPubkey, index }
 
 structure FixtureBlock where
-  slot          : Nat
-  proposerIndex : Nat
-  parentRoot    : String
-  stateRoot     : String
+  slot          : Nat := 0
+  proposerIndex : Nat := 0
+  parentRoot    : String := ""
+  stateRoot     : String := ""
+  deriving Inhabited
 
 instance : FromJson FixtureBlock where
   fromJson? json := do
@@ -215,12 +216,14 @@ instance : FromJson SSZFixture where
 structure STFixture where
   pre    : FixtureState
   blocks : Array FixtureBlock
+  post   : Option FixtureState
 
 instance : FromJson STFixture where
   fromJson? json := do
     let pre ← json.getObjValAs? FixtureState "pre"
     let blocks ← json.getObjValAs? (Array FixtureBlock) "blocks"
-    return { pre, blocks }
+    let post := json.getObjValAs? FixtureState "post" |>.toOption
+    return { pre, blocks, post }
 
 -- ════════════════════════════════════════════════════════════════
 -- Fork choice fixture type
