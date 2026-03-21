@@ -1,6 +1,6 @@
 ---
 title: Integration Guide
-last_updated: 2026-03-18
+last_updated: 2026-03-21
 tags:
   - integration
   - devnet
@@ -103,9 +103,9 @@ After starting the client against a running devnet:
 ```
 lean-consensus-data/
   blocks/
-    <hex-root>.ssz     # SSZ-encoded BeaconBlock files
+    <hex-root>.ssz     # SSZ-encoded Block files
   states/
-    <hex-root>.ssz     # SSZ-encoded BeaconState files
+    <hex-root>.ssz     # SSZ-encoded State files
   store-snapshot.ssz   # Fork choice metadata for restart
 ```
 
