@@ -51,8 +51,8 @@ Dependent-typed collections enforce invariants at the type level:
 ### Consensus Types (`LeanConsensus/Consensus/`)
 
 - `Constants.lean` — all protocol constants as `Nat` (usable as type-level parameters)
-- `Types.lean` — full beacon chain type definitions (`BeaconState`, `BeaconBlock`, `Validator`, etc.) with manual SSZ encode/decode/hash instances using `SszEncoder`
-- `ForkChoice.lean`, `StateTransition.lean` — Phase 3 stubs
+- `Types.lean` — full beacon chain type definitions (`State`, `Block`, `SignedBlock`, `BlockSignatures`, `Validator`, etc.) with auto-derived SSZ instances
+- `ForkChoice.lean`, `StateTransition.lean` — consensus logic (slot processing, block validation, LMD-GHOST)
 
 ### Proofs (`proofs/`)
 
