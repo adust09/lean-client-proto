@@ -80,7 +80,7 @@ def runTests : IO (Nat × Nat) := do
   total := total + t; failures := failures + f
 
   -- computeSigningRoot produces a 32-byte result
-  let cp : Checkpoint := { slot := 42, root := Bytes32.zero }
+  let cp : Checkpoint := { root := Bytes32.zero, slot := 42 }
   let sigRoot := computeSigningRoot cp domain
   let (t, f) ← check "computeSigningRoot produces Bytes32" (sigRoot.data.size == 32)
   total := total + t; failures := failures + f
@@ -91,7 +91,7 @@ def runTests : IO (Nat × Nat) := do
   total := total + t; failures := failures + f
 
   -- Different objects produce different signing roots
-  let cp2 : Checkpoint := { slot := 43, root := Bytes32.zero }
+  let cp2 : Checkpoint := { root := Bytes32.zero, slot := 43 }
   let sigRoot3 := computeSigningRoot cp2 domain
   let (t, f) ← check "different objects → different signing roots" (!(sigRoot == sigRoot3))
   total := total + t; failures := failures + f
