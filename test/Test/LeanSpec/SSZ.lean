@@ -80,6 +80,9 @@ def runTests : IO (Nat × Nat) := do
       | "AggregatedAttestation" =>
         let (t, f) ← testRoundtrip (α := AggregatedAttestation) "AggregatedAttestation" fixture
         total := total + t; failures := failures + f
+      | "SignedAggregatedAttestation" =>
+        let (t, f) ← testRoundtrip (α := SignedAggregatedAttestation) "SignedAggregatedAttestation" fixture
+        total := total + t; failures := failures + f
       | "Attestation" =>
         let (t, f) ← testRoundtrip (α := Attestation) "Attestation" fixture
         total := total + t; failures := failures + f
