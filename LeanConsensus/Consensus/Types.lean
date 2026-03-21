@@ -232,21 +232,21 @@ structure State where
 -- Non-SSZ Internal Types (for fork choice)
 -- ════════════════════════════════════════════════════════════════
 
-structure LatestMessage where
-  slot : Slot
-  root : Root
-  deriving BEq
+/-- Interval-based time: ticks since genesis (5 intervals per slot). -/
+abbrev Interval := UInt64
 
 structure Store where
-  time                  : UInt64
-  config                : Config
-  head                  : Root
-  safeTarget            : Root
-  latestJustified       : Checkpoint
-  latestFinalized       : Checkpoint
-  blocks                : Std.HashMap Root Block
-  states                : Std.HashMap Root State
-  validatorId           : Option ValidatorIndex
-  latestMessages        : Std.HashMap ValidatorIndex LatestMessage
+  time                           : Interval
+  config                         : Config
+  head                           : Root
+  safeTarget                     : Root
+  latestJustified                : Checkpoint
+  latestFinalized                : Checkpoint
+  blocks                         : Std.HashMap Root Block
+  states                         : Std.HashMap Root State
+  validatorId                    : Option ValidatorIndex
+  attestationSignatures          : Std.HashMap Root (Array SignedAttestation)
+  latestNewAggregatedPayloads    : Std.HashMap Root SignedAggregatedAttestation
+  latestKnownAggregatedPayloads  : Std.HashMap Root SignedAggregatedAttestation
 
 end LeanConsensus.Consensus

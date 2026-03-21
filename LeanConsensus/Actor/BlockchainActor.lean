@@ -12,6 +12,7 @@ import LeanConsensus.Actor
 import LeanConsensus.Actor.Messages
 import LeanConsensus.Consensus.ForkChoice
 import LeanConsensus.Consensus.StateTransition
+import LeanConsensus.Consensus.Constants
 import LeanConsensus.Storage
 import LeanConsensus.Metrics
 
@@ -67,7 +68,7 @@ private def handleNewBlock (state : BlockchainActorState)
 private def handleNewAttestation (state : BlockchainActorState)
     (att : SignedAttestation) : IO Unit := do
   let store ← state.store.get
-  match onAttestation store att.validatorIndex att.data with
+  match onGossipAttestation store { data := att.data, validatorIndex := att.validatorIndex, signature := att.signature } with
   | .ok newStore =>
     state.store.set newStore
     if let some m := state.metrics then
@@ -83,7 +84,8 @@ private def handleNewAttestation (state : BlockchainActorState)
 private def handleSlotTick (state : BlockchainActorState)
     (tick : SlotTick) : IO Unit := do
   let store ← state.store.get
-  let newStore := onTick store tick.slot
+  let interval := tick.slot * INTERVALS_PER_SLOT.toUInt64
+  let newStore := onTick store interval
   state.store.set newStore
   send state.validator (.proposeBlock tick.slot)
   send state.validator (.attestSlot tick.slot)
