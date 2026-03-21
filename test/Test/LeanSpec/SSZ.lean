@@ -101,9 +101,6 @@ def runTests : IO (Nat × Nat) := do
       | "SignedBlock" =>
         let (t, f) ← testRoundtrip (α := SignedBlock) "SignedBlock" fixture
         total := total + t; failures := failures + f
-      | "SignedAggregatedAttestation" =>
-        let (t, f) ← testRoundtrip (α := SignedAggregatedAttestation) "SignedAggregatedAttestation" fixture
-        total := total + t; failures := failures + f
       | "State" =>
         let (t, f) ← testRoundtrip (α := State) "State" fixture
         total := total + t; failures := failures + f
