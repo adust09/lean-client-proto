@@ -1,10 +1,11 @@
 /-
   Fork choice tests using leanSpec-generated fixtures.
 
-  Due to type divergence in State, we test:
+  With aligned State types, we test:
   1. Fixture JSON parsing (anchor state, anchor block, steps)
-  2. Block steps parse correctly
-  3. Step structure validation
+  2. Anchor state → domain State conversion
+  3. Block steps parse correctly
+  4. Step structure validation
 -/
 
 import Test.LeanSpec.Types
@@ -43,9 +44,14 @@ def runTests : IO (Nat × Nat) := do
       IO.println s!"  ✗ {file}: {e}"
       total := total + 1; failures := failures + 1
     | .ok fixture => do
-      -- Verify anchor state and block parsed
-      let (t, f) ← check s!"anchor slot={fixture.anchorState.slot}" true
-      total := total + t; failures := failures + f
+      -- Verify anchor state parsed and converts to domain State
+      match fixture.anchorState.toState with
+      | .ok domainState =>
+        let (t, f) ← check s!"anchor slot={fixture.anchorState.slot} toState" (domainState.slot == fixture.anchorState.slot.toUInt64)
+        total := total + t; failures := failures + f
+      | .error e =>
+        let (t, f) ← check s!"anchor slot={fixture.anchorState.slot} toState ({e})" false
+        total := total + t; failures := failures + f
 
       -- Verify all steps parsed
       for step in fixture.steps do

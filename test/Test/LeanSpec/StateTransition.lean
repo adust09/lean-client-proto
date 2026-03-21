@@ -1,10 +1,11 @@
 /-
   State transition tests using leanSpec-generated fixtures.
 
-  With aligned types, we test:
+  With aligned State types (10-field container), we test:
   1. Fixture JSON parsing succeeds
-  2. Block fields parse correctly
-  3. Post-state slot expectations match block sequence
+  2. Pre-state → domain State conversion
+  3. Block fields parse correctly
+  4. Post-state slot expectations match block sequence
 -/
 
 import Test.LeanSpec.Types
@@ -43,9 +44,14 @@ def runTests : IO (Nat × Nat) := do
       IO.println s!"  ✗ {file}: {e}"
       total := total + 1; failures := failures + 1
     | .ok fixture => do
-      -- Verify pre-state parsed
-      let (t, f) ← check s!"pre-state slot={fixture.pre.slot}" true
-      total := total + t; failures := failures + f
+      -- Verify pre-state parsed and converts to domain State
+      match fixture.pre.toState with
+      | .ok domainState =>
+        let (t, f) ← check s!"pre-state slot={fixture.pre.slot} toState" (domainState.slot == fixture.pre.slot.toUInt64)
+        total := total + t; failures := failures + f
+      | .error e =>
+        let (t, f) ← check s!"pre-state slot={fixture.pre.slot} toState ({e})" false
+        total := total + t; failures := failures + f
 
       -- Verify all blocks parsed with valid slots
       for block in fixture.blocks do
