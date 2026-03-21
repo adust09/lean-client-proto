@@ -73,6 +73,20 @@ def runTests : IO (Nat × Nat) := do
   let (t, f) ← check "Validator roundtrip" (roundtrip val)
   total := total + t; failures := failures + f
 
+  let aspEmpty : AggregatedSignatureProof := {
+    participants := Bitlist.empty VALIDATOR_REGISTRY_LIMIT
+    proofData := ⟨ByteArray.empty, by decide⟩
+  }
+  let (t, f) ← check "AggregatedSignatureProof empty roundtrip" (roundtrip aspEmpty)
+  total := total + t; failures := failures + f
+
+  let aspWithData : AggregatedSignatureProof := {
+    participants := Bitlist.empty VALIDATOR_REGISTRY_LIMIT
+    proofData := ⟨ByteArray.mk #[0xDE, 0xAD, 0xBE, 0xEF], by decide⟩
+  }
+  let (t, f) ← check "AggregatedSignatureProof with data roundtrip" (roundtrip aspWithData)
+  total := total + t; failures := failures + f
+
   return (total, failures)
 
 end Test.SSZ.Roundtrip
