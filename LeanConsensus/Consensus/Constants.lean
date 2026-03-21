@@ -2,7 +2,8 @@
   Consensus Constants — pq-devnet-3
 
   These constants define the consensus parameters for the post-quantum
-  devnet with 3-Slot Finality. Values are from the devnet-3 spec.
+  devnet with 3-Slot Finality. Values are aligned with
+  leanSpec/src/lean_spec/subspecs/chain/config.py.
 
   All constants are Nat-level (not UInt64) so they can be used as
   type-level parameters for SszVector and SszList bounds.
