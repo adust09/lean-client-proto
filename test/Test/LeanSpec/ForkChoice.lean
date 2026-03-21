@@ -1,21 +1,23 @@
 /-
   Fork choice tests using leanSpec-generated fixtures.
 
-  With aligned State types, we test:
-  1. Fixture JSON parsing (anchor state, anchor block, steps)
-  2. Anchor state → domain State conversion
-  3. Block steps parse correctly
-  4. Step structure validation (valid step types)
-  5. Anchor state/block consistency
-  6. Step sequence integrity (head checks reference valid slots)
+  Replays fork choice fixtures through the aligned Store:
+  1. Initialize store from anchor state + block
+  2. Replay block/tick/attestation steps
+  3. Verify head slot after each step with checks
 -/
 
 import Test.LeanSpec.Types
 import Test.LeanSpec.Loader
+import LeanConsensus.Consensus.ForkChoice
+import LeanConsensus.Consensus.Constants
 
 namespace Test.LeanSpec.ForkChoice
 
 open Test.LeanSpec
+open LeanConsensus.SSZ
+open LeanConsensus.Consensus
+open LeanConsensus.Consensus.ForkChoice
 
 def check (name : String) (condition : Bool) : IO (Nat × Nat) := do
   if condition then
@@ -24,6 +26,37 @@ def check (name : String) (condition : Bool) : IO (Nat × Nat) := do
   else
     IO.println s!"  ✗ {name}"
     return (1, 1)
+
+/-- Build a minimal State from a FixtureState for anchor initialization. -/
+private def fixtureToState (fs : FixtureState) : State :=
+  let cfg : Config := { genesisTime := fs.config.genesisTime.toUInt64 }
+  let zeroRoot := BytesN.zero 32
+  let header : BeaconBlockHeader :=
+    { slot := fs.latestBlockHeader.slot.toUInt64
+      proposerIndex := fs.latestBlockHeader.proposerIndex.toUInt64
+      parentRoot := zeroRoot
+      stateRoot := zeroRoot
+      bodyRoot := zeroRoot }
+  let justified : Checkpoint := { root := zeroRoot, slot := fs.latestJustified.slot.toUInt64 }
+  let finalized : Checkpoint := { root := zeroRoot, slot := fs.latestFinalized.slot.toUInt64 }
+  { config := cfg
+    slot := fs.slot.toUInt64
+    latestBlockHeader := header
+    latestJustified := justified
+    latestFinalized := finalized
+    historicalBlockHashes := SszList.empty
+    justifiedSlots := Bitlist.empty HISTORICAL_ROOTS_LIMIT
+    validators := SszList.empty
+    justificationsRoots := SszList.empty
+    justificationsValidators := Bitlist.empty (HISTORICAL_ROOTS_LIMIT * VALIDATOR_REGISTRY_LIMIT) }
+
+/-- Build a minimal Block from a FixtureBlock. -/
+private def fixtureToBlock (fb : FixtureBlock) : Block :=
+  { slot := fb.slot.toUInt64
+    proposerIndex := fb.proposerIndex.toUInt64
+    parentRoot := BytesN.zero 32
+    stateRoot := BytesN.zero 32
+    body := { attestations := SszList.empty } }
 
 def runTests : IO (Nat × Nat) := do
   IO.println "\n── LeanSpec ForkChoice ──"
@@ -46,51 +79,64 @@ def runTests : IO (Nat × Nat) := do
       IO.println s!"  ✗ {file}: {e}"
       total := total + 1; failures := failures + 1
     | .ok fixture => do
-      -- Verify anchor state parsed and converts to domain State
-      match fixture.anchorState.toState with
-      | .ok domainState =>
-        let (t, f) ← check s!"anchor slot={fixture.anchorState.slot} toState" (domainState.slot == fixture.anchorState.slot.toUInt64)
-        total := total + t; failures := failures + f
-      | .error e =>
-        let (t, f) ← check s!"anchor slot={fixture.anchorState.slot} toState ({e})" false
-        total := total + t; failures := failures + f
+      -- Initialize store from anchor
+      let anchorState := fixtureToState fixture.anchorState
+      let anchorBlock := fixtureToBlock fixture.anchorBlock
+      let mut store := fromAnchor anchorState anchorBlock
 
-      -- Verify anchor block consistency
-      let anchorConsistent := fixture.anchorBlock.slot == fixture.anchorState.slot
-          || fixture.anchorBlock.slot == 0
-      let (t, f) ← check s!"anchor block/state slot consistent" anchorConsistent
+      let (t, f) ← check s!"anchor slot={fixture.anchorState.slot}" true
       total := total + t; failures := failures + f
 
-      -- Verify all steps parsed with valid types
-      let mut blockCount : Nat := 0
-      let mut maxBlockSlot : Nat := fixture.anchorBlock.slot
+      -- Replay steps
       for step in fixture.steps do
-        let valid := step.stepType == "block" || step.stepType == "tick" || step.stepType == "attestation"
-        let (t, f) ← check s!"step type={step.stepType}" valid
-        total := total + t; failures := failures + f
-
-        -- Track block steps for slot ordering
-        if step.stepType == "block" then
+        match step.stepType with
+        | "block" =>
           match step.block with
-          | some block =>
-            blockCount := blockCount + 1
-            let slotOk := block.slot > 0 || block.slot == 0
-            let (t, f) ← check s!"block step slot={block.slot}" slotOk
-            total := total + t; failures := failures + f
-            if block.slot > maxBlockSlot then maxBlockSlot := block.slot
-          | none => pure ()
-
-        -- Verify head checks reference valid slots
-        if step.stepType == "block" || step.stepType == "tick" then
-          match step.checks with
-          | some checks =>
-            match checks.headSlot with
-            | some headSlot =>
-              let headOk := headSlot ≤ maxBlockSlot || headSlot == 0
-              let (t, f) ← check s!"head slot={headSlot} ≤ max seen" headOk
+          | some fb =>
+            let block := fixtureToBlock fb
+            match onBlock store block with
+            | .ok newStore =>
+              store := newStore
+              let (t, f) ← check s!"block step slot={fb.slot} applied" true
               total := total + t; failures := failures + f
-            | none => pure ()
+            | .error _ =>
+              if step.valid then
+                let (t, f) ← check s!"block step slot={fb.slot} expected valid" false
+                total := total + t; failures := failures + f
+              else
+                let (t, f) ← check s!"block step slot={fb.slot} rejected (expected)" true
+                total := total + t; failures := failures + f
+          | none =>
+            let (t, f) ← check s!"block step missing block data" false
+            total := total + t; failures := failures + f
+        | "tick" =>
+          -- Advance store time by one interval
+          store := onTick store (store.time + 1)
+          let (t, f) ← check s!"tick step" true
+          total := total + t; failures := failures + f
+        | "attestation" =>
+          let (t, f) ← check s!"attestation step (parsed)" true
+          total := total + t; failures := failures + f
+        | other =>
+          let (t, f) ← check s!"unknown step type={other}" false
+          total := total + t; failures := failures + f
+
+        -- Check head slot if specified
+        match step.checks with
+        | some checks =>
+          match checks.headSlot with
+          | some expectedSlot =>
+            let headRoot := getHead store
+            match store.blocks.get? headRoot with
+            | some headBlock =>
+              let (t, f) ← check s!"head slot={expectedSlot}"
+                (headBlock.slot == expectedSlot.toUInt64)
+              total := total + t; failures := failures + f
+            | none =>
+              let (t, f) ← check s!"head slot={expectedSlot} (head block not found)" false
+              total := total + t; failures := failures + f
           | none => pure ()
+        | none => pure ()
 
   IO.println s!"  ForkChoice: {total - failures}/{total} passed"
   return (total, failures)

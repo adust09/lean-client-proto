@@ -150,32 +150,38 @@ def runTests : IO (Nat × Nat) := do
       let (t, f) ← check "onBlock rejects duplicate" false
       total := total + t; failures := failures + f
 
-  -- Test 6: onAttestation equivocation detection
+  -- Test 6: onGossipAttestation stores attestation
   do
     let store := fromAnchor genesis genesisBlock
     let genesisRoot := blockRoot genesisBlock
-    let att1 : AttestationData :=
-      { slot := 0
-        head := { root := genesisRoot, slot := 0 }
-        source := store.latestJustified
-        target := store.latestJustified }
-    match onAttestation store 0 att1 with
+    let att : SignedAttestation :=
+      { data := { slot := 0
+                  head := { root := genesisRoot, slot := 0 }
+                  source := store.latestJustified
+                  target := store.latestJustified }
+        validatorIndex := 0
+        signature := BytesN.zero XMSS_SIGNATURE_SIZE }
+    match onGossipAttestation store att with
     | .ok store2 =>
-      let att2 : AttestationData :=
-        { slot := 0
-          head := { root := Bytes32.zero, slot := 0 }
-          source := store.latestJustified
-          target := store.latestJustified }
-      match onAttestation store2 0 att2 with
-      | .error (.equivocation _) =>
-        let (t, f) ← check "equivocation detection" true
-        total := total + t; failures := failures + f
-      | _ =>
-        let (t, f) ← check "equivocation detection" false
-        total := total + t; failures := failures + f
-    | .error _ =>
-      let (t, f) ← check "equivocation setup failed" false
+      let sigs := store2.attestationSignatures.getD genesisRoot #[]
+      let (t, f) ← check "onGossipAttestation stores signature" (sigs.size == 1)
       total := total + t; failures := failures + f
+    | .error e =>
+      let (t, f) ← check s!"onGossipAttestation (error: {e})" false
+      total := total + t; failures := failures + f
+
+  -- Test 7: onTick at slot boundary promotes payloads
+  do
+    let store := fromAnchor genesis genesisBlock
+    let store2 := onTick store (INTERVALS_PER_SLOT.toUInt64)
+    let (t, f) ← check "onTick advances time" (store2.time == INTERVALS_PER_SLOT.toUInt64)
+    total := total + t; failures := failures + f
+
+  -- Test 8: intervalToSlot conversion
+  do
+    let slot := intervalToSlot (15 : UInt64)
+    let (t, f) ← check "intervalToSlot(15) = 3" (slot == 3)
+    total := total + t; failures := failures + f
 
   return (total, failures)
 

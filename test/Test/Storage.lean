@@ -105,7 +105,9 @@ def runTests : IO (Nat × Nat) := do
     blocks := ∅
     states := ∅
     validatorId := none
-    latestMessages := ∅
+    attestationSignatures := ∅
+    latestNewAggregatedPayloads := ∅
+    latestKnownAggregatedPayloads := ∅
   }
   sb.saveStoreSnapshot store
   let loaded ← sb.loadStoreSnapshot
