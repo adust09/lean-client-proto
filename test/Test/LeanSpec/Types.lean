@@ -61,10 +61,11 @@ instance : FromJson FixtureValidator where
     return { attestationPubkey, proposalPubkey, index }
 
 structure FixtureBlock where
-  slot          : Nat
-  proposerIndex : Nat
-  parentRoot    : String
-  stateRoot     : String
+  slot          : Nat := 0
+  proposerIndex : Nat := 0
+  parentRoot    : String := ""
+  stateRoot     : String := ""
+  deriving Inhabited
 
 instance : FromJson FixtureBlock where
   fromJson? json := do
