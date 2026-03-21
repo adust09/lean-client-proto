@@ -45,6 +45,14 @@ def runTests : IO (Nat × Nat) := do
   let (t, f) ← check "Bytes32 zero roundtrip" (roundtrip Bytes32.zero)
   total := total + t; failures := failures + f
 
+  let cfg : Config := { genesisTime := 1700000000 }
+  let (t, f) ← check "Config roundtrip" (roundtrip cfg)
+  total := total + t; failures := failures + f
+
+  let cfgZero : Config := { genesisTime := 0 }
+  let (t, f) ← check "Config zero roundtrip" (roundtrip cfgZero)
+  total := total + t; failures := failures + f
+
   let cp : Checkpoint := { root := Bytes32.zero, slot := 100 }
   let (t, f) ← check "Checkpoint roundtrip" (roundtrip cp)
   total := total + t; failures := failures + f
