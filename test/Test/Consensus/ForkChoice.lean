@@ -97,7 +97,7 @@ def runTests : IO (Nat × Nat) := do
     let store := fromAnchor genesis genesisBlock
     let genesisRoot := blockRoot genesisBlock
     let block1 : Block :=
-      { slot := 1, proposerIndex := 0
+      { slot := 1, proposerIndex := 1
         parentRoot := genesisRoot
         stateRoot := Bytes32.zero
         body := { attestations := SszList.empty } }

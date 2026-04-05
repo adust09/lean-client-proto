@@ -112,6 +112,153 @@ def sszDecodeImpl {maxCap : Nat} (data : ByteArray) : Except SszError (Bitlist m
       else
         .error (.capacityExceeded maxCap length)
 
+/-- Set a bit at index `i` to the given value. Requires `i < bl.length`. -/
+def setBit {maxCap : Nat} (bl : Bitlist maxCap) (i : Nat) (_h : i < bl.length) (val : Bool) : Bitlist maxCap :=
+  let byteIdx := i / 8
+  let bitIdx := i % 8
+  let oldByte := bl.data.get! byteIdx
+  let mask := (1 : UInt8) <<< bitIdx.toUInt8
+  let newByte := if val then oldByte ||| mask else oldByte &&& mask.complement
+  let newData := bl.data.set! byteIdx newByte
+  if hsize : newData.size = (bl.length + 7) / 8 then
+    ⟨newData, bl.length, bl.hbound, hsize⟩
+  else
+    bl
+
+/-- Extend bitlist to `n` bits, zero-filling new positions. No-op if `n ≤ bl.length`. -/
+def extendToLength {maxCap : Nat} (bl : Bitlist maxCap) (n : Nat) :
+    Except SszError (Bitlist maxCap) :=
+  if n ≤ bl.length then .ok bl
+  else if h : n ≤ maxCap then
+    let newByteCount := (n + 7) / 8
+    let result := Id.run do
+      let mut r := ByteArray.mk (Array.replicate newByteCount 0)
+      for i in [:bl.length] do
+        let byteIdx := i / 8
+        let bitIdx := i % 8
+        let srcByte := bl.data.get! byteIdx
+        if (srcByte >>> bitIdx.toUInt8) &&& 1 == 1 then
+          let dstByte := r.get! byteIdx
+          r := r.set! byteIdx (dstByte ||| ((1 : UInt8) <<< bitIdx.toUInt8))
+      return r
+    if hsize : result.size = (n + 7) / 8 then
+      .ok ⟨result, n, h, hsize⟩
+    else
+      .error (.other "bitlist extendToLength: unexpected size")
+  else
+    .error (.capacityExceeded maxCap n)
+
+/-- Drop the first `delta` bits, returning a shorter bitlist. -/
+def shiftWindow {maxCap : Nat} (bl : Bitlist maxCap) (delta : Nat) : Bitlist maxCap :=
+  if delta == 0 then bl
+  else if delta ≥ bl.length then empty maxCap
+  else
+    let newLen := bl.length - delta
+    let newByteCount := (newLen + 7) / 8
+    let result := Id.run do
+      let mut r := ByteArray.mk (Array.replicate newByteCount 0)
+      for i in [:newLen] do
+        let srcIdx := i + delta
+        let srcByteIdx := srcIdx / 8
+        let srcBitIdx := srcIdx % 8
+        let srcByte := bl.data.get! srcByteIdx
+        if (srcByte >>> srcBitIdx.toUInt8) &&& 1 == 1 then
+          let dstByteIdx := i / 8
+          let dstBitIdx := i % 8
+          let dstByte := r.get! dstByteIdx
+          r := r.set! dstByteIdx (dstByte ||| ((1 : UInt8) <<< dstBitIdx.toUInt8))
+      return r
+    if hsize : result.size = (newLen + 7) / 8 then
+      have hle : newLen ≤ maxCap := Nat.le_trans (Nat.sub_le bl.length delta) bl.hbound
+      ⟨result, newLen, hle, hsize⟩
+    else
+      empty maxCap
+
+/-- Return an array of indices where bits are set. -/
+def toIndices {maxCap : Nat} (bl : Bitlist maxCap) : Array Nat := Id.run do
+  let mut result := #[]
+  for i in [:bl.length] do
+    let byteIdx := i / 8
+    let bitIdx := i % 8
+    let byte := bl.data.get! byteIdx
+    if (byte >>> bitIdx.toUInt8) &&& 1 == 1 then
+      result := result.push i
+  return result
+
+/-- Extract bits `[start, start+len)` as a new Bitlist.
+    Out-of-range source bits are treated as 0. -/
+def sliceSegment {maxCap : Nat} (bl : Bitlist maxCap) (start len : Nat)
+    {outCap : Nat} (hcap : len ≤ outCap) : Bitlist outCap :=
+  let newByteCount := (len + 7) / 8
+  let result := Id.run do
+    let mut r := ByteArray.mk (Array.replicate newByteCount 0)
+    for i in [:len] do
+      let srcIdx := start + i
+      if srcIdx < bl.length then
+        let srcByteIdx := srcIdx / 8
+        let srcBitIdx := srcIdx % 8
+        let srcByte := bl.data.get! srcByteIdx
+        if (srcByte >>> srcBitIdx.toUInt8) &&& 1 == 1 then
+          let dstByteIdx := i / 8
+          let dstBitIdx := i % 8
+          let dstByte := r.get! dstByteIdx
+          r := r.set! dstByteIdx (dstByte ||| ((1 : UInt8) <<< dstBitIdx.toUInt8))
+    return r
+  if hsize : result.size = (len + 7) / 8 then
+    ⟨result, len, hcap, hsize⟩
+  else
+    zeros len hcap
+
+/-- Create a bitlist from an array of Bool values. -/
+def fromBools {maxCap : Nat} (vals : Array Bool) (hcap : vals.size ≤ maxCap) : Bitlist maxCap :=
+  let len := vals.size
+  let byteCount := (len + 7) / 8
+  let result := Id.run do
+    let mut r := ByteArray.mk (Array.replicate byteCount 0)
+    for i in [:len] do
+      if vals[i]! then
+        let byteIdx := i / 8
+        let bitIdx := i % 8
+        let byte := r.get! byteIdx
+        r := r.set! byteIdx (byte ||| ((1 : UInt8) <<< bitIdx.toUInt8))
+    return r
+  if hsize : result.size = (len + 7) / 8 then
+    ⟨result, len, hcap, hsize⟩
+  else
+    zeros len hcap
+
+/-- Concatenate two bitlists. -/
+def concat {maxCap : Nat} (a b : Bitlist maxCap) : Except SszError (Bitlist maxCap) :=
+  let newLen := a.length + b.length
+  if h : newLen ≤ maxCap then
+    let newByteCount := (newLen + 7) / 8
+    let result := Id.run do
+      let mut r := ByteArray.mk (Array.replicate newByteCount 0)
+      for i in [:a.length] do
+        let byteIdx := i / 8
+        let bitIdx := i % 8
+        let srcByte := a.data.get! byteIdx
+        if (srcByte >>> bitIdx.toUInt8) &&& 1 == 1 then
+          let dstByte := r.get! i / 8
+          r := r.set! (i / 8) (dstByte ||| ((1 : UInt8) <<< (i % 8).toUInt8))
+      for j in [:b.length] do
+        let dstIdx := a.length + j
+        let srcByteIdx := j / 8
+        let srcBitIdx := j % 8
+        let srcByte := b.data.get! srcByteIdx
+        if (srcByte >>> srcBitIdx.toUInt8) &&& 1 == 1 then
+          let dstByteIdx := dstIdx / 8
+          let dstBitIdx := dstIdx % 8
+          let dstByte := r.get! dstByteIdx
+          r := r.set! dstByteIdx (dstByte ||| ((1 : UInt8) <<< dstBitIdx.toUInt8))
+      return r
+    if hsize : result.size = (newLen + 7) / 8 then
+      .ok ⟨result, newLen, h, hsize⟩
+    else
+      .error (.other "bitlist concat: unexpected size")
+  else
+    .error (.capacityExceeded maxCap newLen)
+
 end Bitlist
 
 -- SSZ instances: Bitlist is variable-size
